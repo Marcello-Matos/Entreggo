@@ -1,0 +1,214 @@
+import uuid
+from collections import Counter
+from datetime import UTC, datetime, timedelta
+
+import httpx
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
+
+from app.auth import get_current_user
+from app.config import Settings, get_settings
+from app.db import get_db
+from app.deps import ensure_capacity, get_owned_route, mark_route_changed
+from app.models import Package, Route, RouteStop, User
+from app.schemas import (
+    GeocodeResult,
+    OptimizeIn,
+    OptimizeOut,
+    PackageCreate,
+    PackageOut,
+    RouteCreate,
+    RouteDetail,
+    RouteOut,
+    RouteSummary,
+    ScanIn,
+    StopOut,
+)
+from app.services.geocoding import Geocoder, full_address, get_geocoder
+from app.services.optimizer import NoSolutionError, haversine_m, optimize_order
+
+router = APIRouter(prefix="/v1/routes", tags=["routes"])
+
+DISCLAIMER = (
+    "Sequência estimada por distância em linha reta. Trânsito, restrições de via e acesso "
+    "podem alterar o resultado; recalcule quando necessário."
+)
+
+
+@router.post("", response_model=RouteOut, status_code=status.HTTP_201_CREATED)
+def create_route(
+    body: RouteCreate, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+):
+    route = Route(user_id=user.id, **body.model_dump())
+    db.add(route)
+    db.commit()
+    return route
+
+
+@router.get("", response_model=list[RouteOut])
+def list_routes(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return db.scalars(
+        select(Route).where(Route.user_id == user.id).order_by(Route.created_at.desc())
+    ).all()
+
+
+@router.get("/{route_id}", response_model=RouteDetail)
+def get_route(
+    route_id: uuid.UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+):
+    return get_owned_route(db, route_id, user)
+
+
+def _add_package(db: Session, user: User, route: Route, data: PackageCreate) -> Package:
+    ensure_capacity(db, user, route, 1)
+    pkg = Package(route_id=route.id, **data.model_dump())
+    if pkg.lat is not None and pkg.lng is not None:
+        pkg.address_status = "ready"
+    db.add(pkg)
+    mark_route_changed(route)
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(status.HTTP_409_CONFLICT, "Código já cadastrado nesta rota") from exc
+    return pkg
+
+
+@router.post("/{route_id}/packages", response_model=PackageOut, status_code=201)
+def add_package(
+    route_id: uuid.UUID,
+    body: PackageCreate,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    return _add_package(db, user, get_owned_route(db, route_id, user), body)
+
+
+@router.post("/{route_id}/scan", response_model=PackageOut, status_code=201)
+def scan_package(
+    route_id: uuid.UUID,
+    body: ScanIn,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    route = get_owned_route(db, route_id, user)
+    return _add_package(db, user, route, PackageCreate(tracking_code=body.code.strip()))
+
+
+@router.post("/{route_id}/geocode", response_model=GeocodeResult)
+def geocode_route(
+    route_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    geocoder: Geocoder = Depends(get_geocoder),
+):
+    route = get_owned_route(db, route_id, user)
+    for pkg in route.packages:
+        if pkg.address_status == "ready" or not pkg.address_text:
+            continue
+        query = full_address(pkg.address_text, pkg.city, pkg.state, pkg.postal_code)
+        try:
+            hit = geocoder.geocode(query)
+        except httpx.HTTPError:
+            break  # fornecedor indisponível: mantém o restante pendente para nova tentativa
+        if hit is None:
+            pkg.address_status = "not_found"
+            continue
+        pkg.lat, pkg.lng, pkg.address_status = hit.lat, hit.lng, "ready"
+        pkg.geocode_meta = {
+            "provider": hit.provider,
+            "confidence": hit.confidence,
+            "queried_at": hit.queried_at,
+        }
+
+    counts = Counter(p.address_status for p in route.packages)
+    if route.packages and counts["ready"] == len(route.packages) and route.status == "draft":
+        route.status = "validated"
+    db.commit()
+    return GeocodeResult(
+        geocoded=counts["ready"], not_found=counts["not_found"], pending=counts["pending_review"]
+    )
+
+
+@router.post("/{route_id}/optimize", response_model=OptimizeOut)
+def optimize_route(
+    route_id: uuid.UUID,
+    body: OptimizeIn | None = None,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+):
+    route = get_owned_route(db, route_id, user)
+    if route.start_lat is None or route.start_lng is None:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Defina o ponto inicial da rota")
+
+    usable = [
+        p
+        for p in route.packages
+        if p.lat is not None and p.lng is not None and p.status == "pending"
+    ]
+    skipped = [p.id for p in route.packages if p.status == "pending" and p not in usable]
+    if not usable:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT, "Nenhum pacote pendente com endereço validado"
+        )
+
+    start = (route.start_lat, route.start_lng)
+    try:
+        result = optimize_order(
+            start, [(p.lat, p.lng) for p in usable], settings.optimizer_time_limit_s
+        )
+    except NoSolutionError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
+
+    speed_ms = settings.average_speed_kmh * 1000 / 3600
+    clock = route.planned_at or datetime.now(UTC)
+    elapsed, prev = 0.0, start
+    route.stops.clear()
+    db.flush()
+    for seq, idx in enumerate(result.order, start=1):
+        pkg = usable[idx]
+        elapsed += haversine_m(prev, (pkg.lat, pkg.lng)) / speed_ms
+        prev = (pkg.lat, pkg.lng)
+        route.stops.append(
+            RouteStop(
+                package_id=pkg.id, sequence=seq, eta_estimate=clock + timedelta(seconds=elapsed)
+            )
+        )
+
+    route.status = "optimized"
+    route.optimization = {
+        "provider": "haversine",
+        "objective": "distance",
+        "total_distance_m": result.total_distance_m,
+        "estimated_duration_s": round(elapsed),
+        "computed_at": datetime.now(UTC).isoformat(),
+        "version": 1 + ((route.optimization or {}).get("version") or 0),
+    }
+    db.commit()
+    return OptimizeOut(
+        stops=[StopOut.model_validate(s) for s in route.stops],
+        total_distance_m=result.total_distance_m,
+        estimated_duration_s=round(elapsed),
+        skipped_package_ids=skipped,
+        provider="haversine",
+        objective="distance",
+        disclaimer=DISCLAIMER,
+    )
+
+
+@router.get("/{route_id}/summary", response_model=RouteSummary)
+def route_summary(
+    route_id: uuid.UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+):
+    route = get_owned_route(db, route_id, user)
+    return RouteSummary(
+        route_id=route.id,
+        status=route.status,
+        total=len(route.packages),
+        by_status=dict(Counter(p.status for p in route.packages)),
+        pending_address_review=sum(p.address_status != "ready" for p in route.packages),
+        total_distance_m=(route.optimization or {}).get("total_distance_m"),
+    )
