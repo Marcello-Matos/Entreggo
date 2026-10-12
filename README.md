@@ -97,6 +97,19 @@ cliente, já commitadas.
 - Análise: `flutter analyze`
 - Testes: `flutter test`
 
+## Produção
+
+- **Banco:** PostgreSQL no [Neon](https://neon.tech) (região São Paulo).
+- **API:** [Render](https://render.com), configurada por `render.yaml` (Blueprint),
+  em `https://entreggo-api.onrender.com`. Cada push na `main` faz deploy automático.
+  Variáveis no painel do Render: `DATABASE_URL` (string do Neon, pode ser colada
+  como vem), `FIREBASE_PROJECT_ID`, `NOMINATIM_CONTACT`.
+- **App apontando para produção:** crie `app/env.prod.json` com
+  `"API_BASE_URL": "https://entreggo-api.onrender.com"` e rode
+  `flutter build ios --release --dart-define-from-file=env.prod.json`.
+- No plano grátis do Render o servidor dorme após ~15 min sem uso; a primeira
+  chamada depois disso leva cerca de 30–60 s.
+
 ## Fluxo de uso
 
 1. **Iniciar entregas de hoje** — cria a rota e abre o scanner.
@@ -126,5 +139,5 @@ cliente, já commitadas.
   antes de produção.
 - **Limites de plano:** no servidor (`app/deps.py`); assinaturas via RevenueCat
   ainda não integradas.
-- Pendentes: deploy da API + Postgres na nuvem, mapa no app, modo offline,
+- Pendentes: mapa no app, modo offline,
   política de retenção de arquivos, TestFlight/Play Store.
