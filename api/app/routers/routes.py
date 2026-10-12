@@ -170,7 +170,15 @@ def _geocode_with_fallback(geocoder: Geocoder, pkg: Package) -> GeocodeHit | Non
     if street_name != street:
         candidates.append(full_address(street_name, pkg.city, pkg.state))
     for query in dict.fromkeys(candidates):
-        hit = geocoder.geocode(query)
+        try:
+            hit = geocoder.geocode(query)
+        except httpx.HTTPError:
+            break  # serviço principal indisponível: segue para os alternativos
+        if hit is not None:
+            return hit
+    structured = getattr(geocoder, "geocode_structured", None)
+    if structured is not None:
+        hit = structured(street, pkg.city, pkg.state, pkg.postal_code)
         if hit is not None:
             return hit
     cep_fallback = getattr(geocoder, "geocode_cep", None)
@@ -208,7 +216,7 @@ def geocode_route(
         try:
             hit = _geocode_with_fallback(geocoder, pkg)
         except httpx.HTTPError:
-            break  # fornecedor indisponível: mantém o restante pendente para nova tentativa
+            continue  # falha pontual: fica pendente, sem interromper os demais
         if hit is None:
             pkg.address_status = "not_found"
             continue

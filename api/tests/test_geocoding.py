@@ -96,3 +96,43 @@ def test_geocode_falls_back_to_cep():
         postal_code="09050-130",
     )
     assert _geocode_with_fallback(Stub(), pkg).confidence == "cep"
+
+
+def _photon_feature(name, city, lat=-23.5, lng=-46.7, type_="street"):
+    return {
+        "geometry": {"coordinates": [lng, lat]},
+        "properties": {"name": name, "city": city, "countrycode": "BR", "type": type_},
+    }
+
+
+def test_photon_rejects_same_street_in_other_city_and_wrong_street(monkeypatch):
+    features = [
+        _photon_feature("Rua Barão de Jaceguai", "São José dos Campos", lat=-23.1),
+        _photon_feature("Rua Flor de Liz", "São Paulo", lat=-23.2),
+        _photon_feature("Rua Barão de Jaceguai", "São Paulo", lat=-23.62),
+    ]
+
+    def fake_get(url, params, headers, timeout):
+        return httpx.Response(200, json={"features": features}, request=httpx.Request("GET", url))
+
+    monkeypatch.setattr(geocoding.httpx, "get", fake_get)
+    hit = geocoding.photon_lookup("Rua Barão de Jaceguai, 1409", "São Paulo", "SP", None)
+    assert (hit.lat, hit.provider) == (-23.62, "photon")
+    assert geocoding.photon_lookup("Rua Bartônias, 100", "Osasco", "SP", None) is None
+
+
+def test_fallback_continues_when_main_provider_is_down():
+    from types import SimpleNamespace
+
+    from app.routers.routes import _geocode_with_fallback
+    from app.services.geocoding import GeocodeHit
+
+    class Down:
+        def geocode(self, query):
+            raise httpx.ConnectError("429")
+
+        def geocode_structured(self, street, city, state, cep):
+            return GeocodeHit(-23.5, -46.6, "street", "photon", "2026-01-01T00:00:00Z")
+
+    pkg = SimpleNamespace(address_text="Rua A, 1", city="Osasco", state="SP", postal_code=None)
+    assert _geocode_with_fallback(Down(), pkg).provider == "photon"
