@@ -8,7 +8,7 @@ import '../scanning/label_capture.dart';
 import '../theme.dart';
 import '../widgets/address_form.dart';
 import '../widgets/status.dart';
-import 'delivery_screen.dart';
+import 'map_screen.dart';
 import 'scanner_screen.dart';
 
 class RouteScreen extends StatefulWidget {
@@ -79,15 +79,15 @@ class _RouteScreenState extends State<RouteScreen> {
     if (!mounted) return;
     setState(() => _busy = false);
     _reload();
-    if (ok) await _startDelivery();
+    if (ok) await _openMap();
   }
 
-  Future<void> _startDelivery() async {
+  /// Mapa com as paradas numeradas; de lá o botão "Iniciar" abre a navegação.
+  Future<void> _openMap() async {
     await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) =>
-            DeliveryScreen(api: widget.api, routeId: widget.routeId),
+        builder: (_) => MapScreen(api: widget.api, routeId: widget.routeId),
       ),
     );
     if (mounted) _reload();
@@ -555,12 +555,12 @@ class _RouteScreenState extends State<RouteScreen> {
                   Expanded(
                     child: canDeliver
                         ? FilledButton.icon(
-                            onPressed: _busy ? null : _startDelivery,
-                            icon: const Icon(Icons.navigation),
+                            onPressed: _busy ? null : _openMap,
+                            icon: const Icon(Icons.map_outlined),
                             label: Text(
                               started
-                                  ? 'Continuar entregas ($pending)'
-                                  : 'Iniciar entregas',
+                                  ? 'Ver mapa e continuar ($pending)'
+                                  : 'Ver mapa e iniciar',
                             ),
                           )
                         : FilledButton.icon(

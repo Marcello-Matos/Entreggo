@@ -7,6 +7,9 @@ class DeliveryRoute {
     this.startAddress,
     this.startLat,
     this.startLng,
+    this.totalPackages = 0,
+    this.deliveredPackages = 0,
+    this.pendingPackages = 0,
   });
 
   factory DeliveryRoute.fromJson(Map<String, dynamic> j) => DeliveryRoute(
@@ -19,6 +22,9 @@ class DeliveryRoute {
     startAddress: j['start_address'] as String?,
     startLat: (j['start_lat'] as num?)?.toDouble(),
     startLng: (j['start_lng'] as num?)?.toDouble(),
+    totalPackages: j['total_packages'] as int? ?? 0,
+    deliveredPackages: j['delivered_packages'] as int? ?? 0,
+    pendingPackages: j['pending_packages'] as int? ?? 0,
   );
 
   final String id;
@@ -28,8 +34,54 @@ class DeliveryRoute {
   final String? startAddress;
   final double? startLat;
   final double? startLng;
+  final int totalPackages;
+  final int deliveredPackages;
+  final int pendingPackages;
 
   bool get isFinished => status == 'completed' || status == 'archived';
+}
+
+/// Resumo do dia exibido na tela inicial.
+class Dashboard {
+  const Dashboard({
+    this.packages = 0,
+    this.delivered = 0,
+    this.failed = 0,
+    this.skipped = 0,
+    this.pending = 0,
+    this.progress = 0,
+    this.activeRouteId,
+    this.activeRouteTitle,
+    this.activeRemaining = 0,
+    this.activeOptimized = false,
+  });
+
+  factory Dashboard.fromJson(Map<String, dynamic> j) {
+    final active = j['active_route'] as Map<String, dynamic>?;
+    return Dashboard(
+      packages: j['packages'] as int,
+      delivered: j['delivered'] as int,
+      failed: j['failed'] as int,
+      skipped: j['skipped'] as int,
+      pending: j['pending'] as int,
+      progress: (j['progress'] as num).toDouble(),
+      activeRouteId: active?['id'] as String?,
+      activeRouteTitle: active?['title'] as String?,
+      activeRemaining: active?['remaining'] as int? ?? 0,
+      activeOptimized: active?['optimized'] as bool? ?? false,
+    );
+  }
+
+  final int packages;
+  final int delivered;
+  final int failed;
+  final int skipped;
+  final int pending;
+  final double progress;
+  final String? activeRouteId;
+  final String? activeRouteTitle;
+  final int activeRemaining;
+  final bool activeOptimized;
 }
 
 /// Dados de endereço enviados ao criar/corrigir um pacote.

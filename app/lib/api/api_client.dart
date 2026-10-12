@@ -56,6 +56,18 @@ class ApiClient {
     return decoded;
   }
 
+  /// Resumo desde a meia-noite local do aparelho.
+  Future<Dashboard> dashboard() async {
+    final now = DateTime.now();
+    final since = DateTime(now.year, now.month, now.day).toUtc();
+    return Dashboard.fromJson(
+      await _send(
+        'GET',
+        '/v1/dashboard?since=${Uri.encodeQueryComponent(since.toIso8601String())}',
+      ) as Map<String, dynamic>,
+    );
+  }
+
   Future<List<DeliveryRoute>> listRoutes() async => [
     for (final r in await _send('GET', '/v1/routes') as List)
       DeliveryRoute.fromJson(r as Map<String, dynamic>),

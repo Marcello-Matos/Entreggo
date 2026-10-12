@@ -156,3 +156,26 @@ def test_delete_route_removes_everything(client, auth, other_auth, route_id):
     assert client.delete(f"/v1/routes/{route_id}", headers=auth).status_code == 204
     assert client.get(f"/v1/routes/{route_id}", headers=auth).status_code == 404
     assert client.get("/v1/routes", headers=auth).json() == []
+
+
+def test_dashboard_today(client, auth, other_auth, route_id):
+    for code in ("A", "B", "C", "D"):
+        client.post(f"/v1/routes/{route_id}/scan", json={"code": code}, headers=auth)
+    pkgs = client.get(f"/v1/routes/{route_id}", headers=auth).json()["packages"]
+    client.patch(f"/v1/packages/{pkgs[0]['id']}/status", json={"status": "delivered"}, headers=auth)
+    client.patch(
+        f"/v1/packages/{pkgs[1]['id']}/status", json={"status": "failed_attempt"}, headers=auth
+    )
+
+    dash = client.get("/v1/dashboard", headers=auth).json()
+    assert (dash["packages"], dash["delivered"], dash["failed"], dash["pending"]) == (4, 1, 1, 2)
+    assert dash["progress"] == 0.5
+    assert dash["active_route"]["id"] == route_id
+    assert dash["active_route"]["remaining"] == 2
+
+    future = client.get("/v1/dashboard", params={"since": "2999-01-01T00:00:00Z"}, headers=auth)
+    assert future.json()["packages"] == 0
+    assert client.get("/v1/dashboard", headers=other_auth).json()["active_route"] is None
+
+    listed = client.get("/v1/routes", headers=auth).json()[0]
+    assert (listed["total_packages"], listed["delivered_packages"]) == (4, 1)

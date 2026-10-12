@@ -54,6 +54,18 @@ class Route(TimestampMixin, Base):
         back_populates="route", cascade="all, delete-orphan", order_by="RouteStop.sequence"
     )
 
+    @property
+    def total_packages(self) -> int:
+        return len(self.packages)
+
+    @property
+    def delivered_packages(self) -> int:
+        return sum(p.status == "delivered" for p in self.packages)
+
+    @property
+    def pending_packages(self) -> int:
+        return sum(p.status == "pending" for p in self.packages)
+
 
 class Package(TimestampMixin, Base):
     __tablename__ = "packages"

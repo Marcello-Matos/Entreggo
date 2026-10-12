@@ -4,7 +4,7 @@ from fastapi import FastAPI
 
 from app import models  # noqa: F401  (registra os modelos no metadata)
 from app.db import Base, engine
-from app.routers import import_jobs, packages, routes, subscription
+from app.routers import dashboard, import_jobs, packages, routes, subscription
 
 
 @asynccontextmanager
@@ -16,7 +16,13 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(title="Entreggo API", version="0.1.0", lifespan=lifespan)
 
-for r in (routes.router, packages.router, import_jobs.router, subscription.router):
+for r in (
+    routes.router,
+    packages.router,
+    import_jobs.router,
+    subscription.router,
+    dashboard.router,
+):
     app.include_router(r)
 
 

@@ -49,13 +49,28 @@ class FakeAuth implements AuthService {
   }
 }
 
-ApiClient fakeApi(List<Map<String, dynamic>> routes) => ApiClient(
+ApiClient fakeApi(
+  List<Map<String, dynamic>> routes, {
+  Map<String, dynamic>? dashboard,
+}) => ApiClient(
   baseUrl: 'http://api.test',
   tokenProvider: () async => 'token',
   httpClient: MockClient((req) async {
     expect(req.headers['Authorization'], 'Bearer token');
+    final body = req.url.path == '/v1/dashboard'
+        ? dashboard ??
+              {
+                'packages': 0,
+                'delivered': 0,
+                'failed': 0,
+                'skipped': 0,
+                'pending': 0,
+                'progress': 0,
+                'active_route': null,
+              }
+        : routes;
     return http.Response.bytes(
-      utf8.encode(jsonEncode(routes)),
+      utf8.encode(jsonEncode(body)),
       200,
       headers: {'content-type': 'application/json'},
     );
@@ -74,11 +89,36 @@ void main() {
     expect(auth.lastEmail, isNull);
   });
 
-  testWidgets('após login mostra as rotas do usuário', (tester) async {
+  testWidgets('após login mostra o resumo do dia e o histórico', (
+    tester,
+  ) async {
     final auth = FakeAuth();
-    final api = fakeApi([
-      {'id': 'r1', 'title': 'Centro', 'status': 'optimized'},
-    ]);
+    final api = fakeApi(
+      [
+        {
+          'id': 'r1',
+          'title': 'Centro',
+          'status': 'optimized',
+          'total_packages': 48,
+          'delivered_packages': 32,
+          'pending_packages': 16,
+        },
+      ],
+      dashboard: {
+        'packages': 48,
+        'delivered': 32,
+        'failed': 0,
+        'skipped': 0,
+        'pending': 16,
+        'progress': 0.6667,
+        'active_route': {
+          'id': 'r1',
+          'title': 'Centro',
+          'remaining': 16,
+          'optimized': true,
+        },
+      },
+    );
     await tester.pumpWidget(EntreggoApp(auth: auth, api: api));
 
     await tester.enterText(find.byType(TextFormField).at(0), 'a@entreggo.app');
@@ -86,9 +126,21 @@ void main() {
     await tester.tap(find.text('Entrar'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Iniciar entregas de hoje'), findsOneWidget);
+    expect(find.text('RESUMO DE HOJE'), findsOneWidget);
+    expect(find.text('48'), findsOneWidget);
+    expect(find.text('32'), findsOneWidget);
+    expect(find.text('67%'), findsOneWidget);
+    expect(find.text('16 paradas restantes'), findsOneWidget);
+
+    await tester.ensureVisible(find.text('Histórico de entregas'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Histórico de entregas'));
+    await tester.pumpAndSettle();
     expect(find.text('Centro'), findsOneWidget);
-    expect(find.text('Otimizada'), findsOneWidget);
+    expect(
+      find.text('32 entregues de 48 pacotes • 16 pendentes'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('botão do Google faz login', (tester) async {
@@ -99,7 +151,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(auth.lastEmail, 'google');
-    expect(find.text('Iniciar entregas de hoje'), findsOneWidget);
+    expect(find.text('Escanear pacotes'), findsOneWidget);
   });
 
   test('RouteDetail ordena pacotes pela sequência sugerida', () {

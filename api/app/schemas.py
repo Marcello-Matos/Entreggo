@@ -80,6 +80,26 @@ class RouteOut(ORMModel):
     status: RouteStatus
     planned_at: datetime | None
     created_at: datetime
+    total_packages: int = 0
+    delivered_packages: int = 0
+    pending_packages: int = 0
+
+
+class ActiveRoute(BaseModel):
+    id: uuid.UUID
+    title: str
+    remaining: int
+    optimized: bool
+
+
+class DashboardOut(BaseModel):
+    packages: int
+    delivered: int
+    failed: int
+    skipped: int
+    pending: int
+    progress: float
+    active_route: ActiveRoute | None
 
 
 class RouteDetail(RouteOut):
