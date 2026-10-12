@@ -29,7 +29,7 @@ class TimestampMixin:
 class User(TimestampMixin, Base):
     __tablename__ = "users"
 
-    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True)
+    id: Mapped[str] = mapped_column(String(128), primary_key=True)  # uid do Firebase
     email: Mapped[str | None] = mapped_column(String(320))
     status: Mapped[str] = mapped_column(String(20), default="active")
 
@@ -38,8 +38,9 @@ class Route(TimestampMixin, Base):
     __tablename__ = "routes"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
-    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), index=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
     title: Mapped[str] = mapped_column(String(200))
+    start_address: Mapped[str | None] = mapped_column(Text)
     start_lat: Mapped[float | None] = mapped_column(Float)
     start_lng: Mapped[float | None] = mapped_column(Float)
     status: Mapped[str] = mapped_column(String(20), default="draft", index=True)
@@ -74,6 +75,7 @@ class Package(TimestampMixin, Base):
     address_status: Mapped[str] = mapped_column(String(20), default="pending_review")
     geocode_meta: Mapped[dict | None] = mapped_column(JSON)
     status: Mapped[str] = mapped_column(String(20), default="pending", index=True)
+    scanned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     route: Mapped[Route] = relationship(back_populates="packages")
 
@@ -96,7 +98,7 @@ class ImportJob(TimestampMixin, Base):
     __tablename__ = "import_jobs"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
-    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), index=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
     route_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("routes.id", ondelete="CASCADE"))
     filename: Mapped[str] = mapped_column(String(255))
     status: Mapped[str] = mapped_column(String(20), default="processing")
@@ -106,7 +108,7 @@ class ImportJob(TimestampMixin, Base):
 class Subscription(Base):
     __tablename__ = "subscriptions"
 
-    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), primary_key=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), primary_key=True)
     product_id: Mapped[str] = mapped_column(String(120))
     entitlement: Mapped[str] = mapped_column(String(40))
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

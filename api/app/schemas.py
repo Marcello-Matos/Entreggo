@@ -15,9 +15,14 @@ class ORMModel(BaseModel):
 
 class RouteCreate(BaseModel):
     title: str = Field(min_length=1, max_length=200)
+    start_address: str | None = Field(default=None, max_length=300)
     start_lat: float | None = Field(default=None, ge=-90, le=90)
     start_lng: float | None = Field(default=None, ge=-180, le=180)
     planned_at: datetime | None = None
+
+
+class RouteUpdate(BaseModel):
+    title: str | None = Field(default=None, min_length=1, max_length=200)
 
 
 class PackageCreate(BaseModel):
@@ -30,6 +35,14 @@ class PackageCreate(BaseModel):
     delivery_notes: str | None = None
     lat: float | None = Field(default=None, ge=-90, le=90)
     lng: float | None = Field(default=None, ge=-180, le=180)
+
+
+class PackageUpdate(BaseModel):
+    address_text: str | None = None
+    city: str | None = Field(default=None, max_length=120)
+    state: str | None = Field(default=None, max_length=2)
+    postal_code: str | None = Field(default=None, max_length=9)
+    delivery_notes: str | None = None
 
 
 class ScanIn(BaseModel):
@@ -49,6 +62,7 @@ class PackageOut(ORMModel):
     lng: float | None
     address_status: AddressStatus
     status: PackageStatus
+    scanned_at: datetime | None = None
 
 
 class StopOut(ORMModel):
@@ -60,6 +74,7 @@ class StopOut(ORMModel):
 class RouteOut(ORMModel):
     id: uuid.UUID
     title: str
+    start_address: str | None
     start_lat: float | None
     start_lng: float | None
     status: RouteStatus
@@ -82,10 +97,14 @@ class GeocodeResult(BaseModel):
     geocoded: int
     not_found: int
     pending: int
+    start_found: bool
 
 
 class OptimizeIn(BaseModel):
     objective: Literal["distance"] = "distance"
+    start_lat: float | None = Field(default=None, ge=-90, le=90)
+    start_lng: float | None = Field(default=None, ge=-180, le=180)
+    start_address: str | None = Field(default=None, max_length=300)
 
 
 class OptimizeOut(BaseModel):

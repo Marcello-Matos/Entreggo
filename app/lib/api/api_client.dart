@@ -24,14 +24,19 @@ class ApiClient {
   }) : _http = httpClient ?? http.Client();
 
   final String baseUrl;
-  final String? Function() tokenProvider;
+  final Future<String?> Function() tokenProvider;
   final http.Client _http;
 
   Future<dynamic> _send(String method, String path, {Object? body}) async {
+    final token = await tokenProvider();
     final request = http.Request(method, Uri.parse('$baseUrl$path'))
       ..headers['Content-Type'] = 'application/json'
-      ..headers['Authorization'] = 'Bearer ${tokenProvider() ?? ''}';
+      ..headers['Authorization'] = 'Bearer ${token ?? ''}';
     if (body != null) request.body = jsonEncode(body);
+    return _decode(request);
+  }
+
+  Future<dynamic> _decode(http.BaseRequest request) async {
     final response = await http.Response.fromStream(await _http.send(request));
     Object? decoded;
     try {
@@ -58,18 +63,24 @@ class ApiClient {
 
   Future<DeliveryRoute> createRoute(
     String title, {
-    double? startLat,
-    double? startLng,
+    String? startAddress,
   }) async => DeliveryRoute.fromJson(
     await _send(
       'POST',
       '/v1/routes',
-      body: {'title': title, 'start_lat': startLat, 'start_lng': startLng},
+      body: {'title': title, 'start_address': startAddress},
     ),
   );
 
   Future<RouteDetail> getRoute(String id) async =>
       RouteDetail.fromJson(await _send('GET', '/v1/routes/$id'));
+
+  Future<DeliveryRoute> renameRoute(String id, String title) async =>
+      DeliveryRoute.fromJson(
+        await _send('PATCH', '/v1/routes/$id', body: {'title': title}),
+      );
+
+  Future<void> deleteRoute(String id) => _send('DELETE', '/v1/routes/$id');
 
   Future<Package> scan(String routeId, String code) async => Package.fromJson(
     await _send('POST', '/v1/routes/$routeId/scan', body: {'code': code}),
@@ -78,17 +89,12 @@ class ApiClient {
   Future<Package> addPackage(
     String routeId, {
     String? trackingCode,
-    String? address,
-    String? city,
+    AddressInput? address,
   }) async => Package.fromJson(
     await _send(
       'POST',
       '/v1/routes/$routeId/packages',
-      body: {
-        'tracking_code': trackingCode,
-        'address_text': address,
-        'city': city,
-      },
+      body: {'tracking_code': trackingCode, ...?address?.toJson()},
     ),
   );
 
@@ -96,13 +102,56 @@ class ApiClient {
       await _send('POST', '/v1/routes/$routeId/geocode')
           as Map<String, dynamic>;
 
-  Future<Map<String, dynamic>> optimize(String routeId) async =>
-      await _send('POST', '/v1/routes/$routeId/optimize')
-          as Map<String, dynamic>;
+  /// Partida: coordenadas do GPS ou, na falta delas, um endereço digitado.
+  Future<Map<String, dynamic>> optimize(
+    String routeId, {
+    double? startLat,
+    double? startLng,
+    String? startAddress,
+  }) async => await _send(
+    'POST',
+    '/v1/routes/$routeId/optimize',
+    body: {
+      'start_lat': startLat,
+      'start_lng': startLng,
+      'start_address': startAddress,
+    },
+  ) as Map<String, dynamic>;
+
+  Future<void> updateAddress(String packageId, AddressInput address) =>
+      _send('PATCH', '/v1/packages/$packageId', body: address.toJson());
+
+  /// Envia planilha CSV/XLSX; retorna o resumo da importação.
+  Future<Map<String, dynamic>> importFile(
+    String routeId,
+    String filename,
+    List<int> bytes,
+  ) async {
+    final token = await tokenProvider();
+    final request =
+        http.MultipartRequest('POST', Uri.parse('$baseUrl/v1/import-jobs'))
+          ..headers['Authorization'] = 'Bearer ${token ?? ''}'
+          ..fields['route_id'] = routeId
+          ..files.add(
+            http.MultipartFile.fromBytes('file', bytes, filename: filename),
+          );
+    final job = await _decode(request) as Map<String, dynamic>;
+    final summary = (job['error_summary'] as Map<String, dynamic>?) ?? {};
+    if (job['status'] == 'failed') {
+      throw ApiException(
+        422,
+        summary['message'] as String? ?? 'Falha na importação',
+      );
+    }
+    return summary;
+  }
 
   Future<void> updateStatus(String packageId, String status) => _send(
     'PATCH',
     '/v1/packages/$packageId/status',
     body: {'status': status},
   );
+
+  Future<void> deletePackage(String packageId) =>
+      _send('DELETE', '/v1/packages/$packageId');
 }

@@ -8,8 +8,34 @@
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
 	<string>Entreggo</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<!-- REVERSED_CLIENT_ID do GoogleService-Info.plist (Google Sign-In) -->
+				<string>com.googleusercontent.apps.789811825272-6da6rlr8ak78t8femb7m9qv39lhmeac4</string>
+			</array>
+		</dict>
+	</array>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Em desenvolvimento, o Entreggo acessa a API rodando no seu computador pela rede local.</string>
 	<key>NSCameraUsageDescription</key>
-	<string>O Entreggo usa a câmera para ler códigos de barras e QR dos pacotes.</string>
+	<string>O Entreggo usa a câmera para ler códigos de barras, QR e o endereço impresso nas etiquetas.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>O Entreggo usa sua localização como ponto de partida para otimizar a rota de entregas.</string>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>comgooglemaps</string>
+		<string>waze</string>
+	</array>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>

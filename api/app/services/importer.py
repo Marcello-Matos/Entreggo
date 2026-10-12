@@ -5,6 +5,7 @@ import unicodedata
 from dataclasses import dataclass, field
 
 from openpyxl import load_workbook
+from pypdf import PdfReader
 
 FIELDS = (
     "tracking_code",
@@ -27,6 +28,25 @@ ALIASES = {
 }
 
 XLSX_MAGIC = b"PK\x03\x04"
+PDF_MAGIC = b"%PDF"
+
+# Padrões de romaneio/lista de entrega em PDF (texto livre, sem colunas garantidas).
+_STREET = re.compile(
+    r"^(?:rua|r\.|avenida|av\.?|estrada|estr\.|rodovia|rod\.?|travessa|trav\.?|tv\.|"
+    r"alameda|al\.?|pra[cç]a|p[cç]a\.?|largo|lgo\.?|beco|bc\.|quadra|qd\.?|viela|vl\.|"
+    r"caminho|boulevard|blvd\.?|setor|loteamento|condom[ií]nio)\b[\s.,]",
+    re.IGNORECASE,
+)
+_CEP = re.compile(r"\bcep\b[:\s.\-]*(\d{5}-?\d{3})|\b(\d{5}-\d{3})\b", re.IGNORECASE)
+_CITY_UF_TAIL = re.compile(r"[-–,]\s*([A-Za-zÀ-ÖØ-öø-ÿ' ]{2,}?)\s*/\s*([A-Z]{2})\s*$")
+_CITY_UF_LINE = re.compile(r"^([A-Za-zÀ-ÖØ-öø-ÿ' .]{2,}?)\s*[-/]\s*([A-Z]{2})$")
+_LABELED_CODE = re.compile(
+    r"(?:pedido|pacote|c[oó]d(?:igo)?\.?|rastreio|tracking|ordem)\b"
+    r"\s*[:#nºo°.\-]*\s*([A-Z0-9][\w\-]{5,})",
+    re.IGNORECASE,
+)
+_BARE_CODE = re.compile(r"^(?=.{8,}$)[A-Z0-9][A-Z0-9\-]*\d[A-Z0-9\-]*$", re.IGNORECASE)
+_NOTE = re.compile(r"^obs(?:erva[çc][ãa]o)?\.?\s*[:.\-]?\s*(.+)", re.IGNORECASE)
 
 
 class ImportFileError(ValueError):
@@ -69,7 +89,85 @@ def _read_table(filename: str, content: bytes) -> list[list[str]]:
         except csv.Error:
             dialect = csv.excel
         return [[c.strip() for c in row] for row in csv.reader(io.StringIO(text), dialect)]
-    raise ImportFileError("Formato não suportado: envie um arquivo CSV ou XLSX válido")
+    raise ImportFileError("Formato não suportado: envie um arquivo CSV, XLSX ou PDF válido")
+
+
+def parse_pdf_lines(lines: list[str]) -> list[dict[str, str | None]]:
+    """Extrai registros de um romaneio em texto: cada linha de logradouro inicia um
+    registro e as linhas vizinhas (até 4 para cada lado) fornecem CEP, cidade/UF,
+    código de rastreio e observação."""
+    used: set[int] = set()
+    records: list[dict[str, str | None]] = []
+    for i, line in enumerate(lines):
+        if i in used or not _STREET.match(line):
+            continue
+        used.add(i)
+        rec: dict[str, str | None] = {"address": line}
+        tail = _CITY_UF_TAIL.search(line)
+        if tail:
+            rec["address"] = line[: tail.start()].rstrip(" ,-–")
+            rec["city"], rec["state"] = tail.group(1).strip(), tail.group(2)
+        for j in range(max(0, i - 4), min(len(lines), i + 5)):
+            if j == i or j in used:
+                continue
+            near = lines[j]
+            cep = _CEP.search(near)
+            if cep and rec.get("postal_code") is None:
+                rec["postal_code"] = cep.group(1) or cep.group(2)
+                used.add(j)
+                continue
+            labeled = _LABELED_CODE.search(near)
+            if labeled and rec.get("tracking_code") is None:
+                rec["tracking_code"] = labeled.group(1)
+                used.add(j)
+                continue
+            city = _CITY_UF_LINE.match(near)
+            if city and rec.get("city") is None:
+                rec["city"], rec["state"] = city.group(1).strip(), city.group(2)
+                used.add(j)
+                continue
+            if rec.get("tracking_code") is None and _BARE_CODE.match(near):
+                rec["tracking_code"] = near
+                used.add(j)
+                continue
+            note = _NOTE.match(near)
+            if note and rec.get("delivery_notes") is None:
+                rec["delivery_notes"] = note.group(1).strip()
+                used.add(j)
+        records.append(rec)
+    return records
+
+
+def _parse_pdf(content: bytes, max_rows: int) -> ParsedImport:
+    try:
+        reader = PdfReader(io.BytesIO(content))
+        lines = [
+            line.strip()
+            for page in reader.pages
+            for line in (page.extract_text() or "").splitlines()
+            if line.strip()
+        ]
+    except ImportFileError:
+        raise
+    except Exception as exc:
+        raise ImportFileError("PDF inválido ou protegido por senha") from exc
+    if not lines:
+        raise ImportFileError(
+            "PDF sem texto legível — pode ser um documento digitalizado como imagem"
+        )
+    records = parse_pdf_lines(lines)
+    if len(records) > max_rows:
+        raise ImportFileError(f"Limite de {max_rows} linhas excedido ({len(records)} endereços)")
+    result = ParsedImport(mapping={"source": "pdf"})
+    for rec in records:
+        if rec.get("postal_code"):
+            rec["postal_code"] = normalize_postal_code(rec["postal_code"])
+        if rec.get("state"):
+            rec["state"] = rec["state"].upper()[:2]
+        result.rows.append({f: rec.get(f) for f in FIELDS})
+    if not result.rows:
+        raise ImportFileError("Nenhum endereço reconhecido no PDF")
+    return result
 
 
 def detect_mapping(headers: list[str]) -> dict[str, str]:
@@ -86,6 +184,10 @@ def detect_mapping(headers: list[str]) -> dict[str, str]:
 def parse_import(
     filename: str, content: bytes, mapping: dict[str, str] | None = None, max_rows: int = 2000
 ) -> ParsedImport:
+    if content.startswith(PDF_MAGIC):
+        if mapping:
+            raise ImportFileError("Mapeamento de colunas não se aplica a PDF")
+        return _parse_pdf(content, max_rows)
     table = [(n, row) for n, row in enumerate(_read_table(filename, content), 1) if any(row)]
     if not table:
         raise ImportFileError("Arquivo vazio")

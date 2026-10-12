@@ -1,10 +1,11 @@
+import re
 import uuid
 from collections import Counter
 from datetime import UTC, datetime, timedelta
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, HTTPException, Response, status
+from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -12,7 +13,15 @@ from app.auth import get_current_user
 from app.config import Settings, get_settings
 from app.db import get_db
 from app.deps import ensure_capacity, get_owned_route, mark_route_changed
-from app.models import Package, Route, RouteStop, User
+from app.models import (
+    DeliveryEvent,
+    ImportJob,
+    Package,
+    Route,
+    RouteStop,
+    User,
+    utcnow,
+)
 from app.schemas import (
     GeocodeResult,
     OptimizeIn,
@@ -23,10 +32,11 @@ from app.schemas import (
     RouteDetail,
     RouteOut,
     RouteSummary,
+    RouteUpdate,
     ScanIn,
     StopOut,
 )
-from app.services.geocoding import Geocoder, full_address, get_geocoder
+from app.services.geocoding import GeocodeHit, Geocoder, full_address, get_geocoder
 from app.services.optimizer import NoSolutionError, haversine_m, optimize_order
 
 router = APIRouter(prefix="/v1/routes", tags=["routes"])
@@ -61,6 +71,34 @@ def get_route(
     return get_owned_route(db, route_id, user)
 
 
+@router.patch("/{route_id}", response_model=RouteOut)
+def update_route(
+    route_id: uuid.UUID,
+    body: RouteUpdate,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    route = get_owned_route(db, route_id, user)
+    for field, value in body.model_dump(exclude_unset=True).items():
+        setattr(route, field, value)
+    db.commit()
+    return route
+
+
+@router.delete("/{route_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_route(
+    route_id: uuid.UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+):
+    """Exclui a rota e tudo que depende dela (pacotes, paradas, eventos, importações)."""
+    route = get_owned_route(db, route_id, user)
+    package_ids = [p.id for p in route.packages]
+    if package_ids:
+        db.execute(delete(DeliveryEvent).where(DeliveryEvent.package_id.in_(package_ids)))
+    db.execute(delete(ImportJob).where(ImportJob.route_id == route.id))
+    db.delete(route)  # cascade ORM remove pacotes e paradas
+    db.commit()
+
+
 def _add_package(db: Session, user: User, route: Route, data: PackageCreate) -> Package:
     ensure_capacity(db, user, route, 1)
     pkg = Package(route_id=route.id, **data.model_dump())
@@ -90,11 +128,64 @@ def add_package(
 def scan_package(
     route_id: uuid.UUID,
     body: ScanIn,
+    response: Response,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    """Registra a leitura. Se o código veio de planilha importada, confirma o pacote (200)."""
     route = get_owned_route(db, route_id, user)
-    return _add_package(db, user, route, PackageCreate(tracking_code=body.code.strip()))
+    code = body.code.strip()
+    existing = db.scalar(
+        select(Package).where(Package.route_id == route.id, Package.tracking_code == code)
+    )
+    if existing is not None:
+        if existing.scanned_at is not None:
+            raise HTTPException(status.HTTP_409_CONFLICT, "Código já cadastrado nesta rota")
+        existing.scanned_at = utcnow()
+        db.commit()
+        response.status_code = status.HTTP_200_OK
+        return existing
+    pkg = _add_package(db, user, route, PackageCreate(tracking_code=code))
+    pkg.scanned_at = utcnow()
+    db.commit()
+    return pkg
+
+
+def _street_part(address: str) -> str:
+    """'Rua X, 300 - Bairro, Cidade - UF' -> 'Rua X, 300'."""
+    return re.split(r"\s+-\s+", address, maxsplit=1)[0].strip(" ,")
+
+
+def _geocode_with_fallback(geocoder: Geocoder, pkg: Package) -> GeocodeHit | None:
+    """Tenta o endereço completo e, se falhar, variações mais simples
+    (só logradouro + cidade/UF, depois logradouro + CEP)."""
+    candidates = [
+        full_address(pkg.address_text, pkg.city, pkg.state, pkg.postal_code)
+    ]
+    street = _street_part(pkg.address_text or "")
+    if street != (pkg.address_text or "").strip():
+        candidates.append(full_address(street, pkg.city, pkg.state))
+    if pkg.postal_code:
+        candidates.append(full_address(street, pkg.city, pkg.postal_code))
+    for query in dict.fromkeys(candidates):
+        hit = geocoder.geocode(query)
+        if hit is not None:
+            return hit
+    return None
+
+
+def _resolve_start(route: Route, geocoder: Geocoder) -> bool:
+    if route.start_lat is not None and route.start_lng is not None:
+        return True
+    if not route.start_address:
+        return False
+    try:
+        hit = geocoder.geocode(full_address(route.start_address))
+    except httpx.HTTPError:
+        return False
+    if hit is not None:
+        route.start_lat, route.start_lng = hit.lat, hit.lng
+    return hit is not None
 
 
 @router.post("/{route_id}/geocode", response_model=GeocodeResult)
@@ -105,12 +196,12 @@ def geocode_route(
     geocoder: Geocoder = Depends(get_geocoder),
 ):
     route = get_owned_route(db, route_id, user)
+    start_found = _resolve_start(route, geocoder)
     for pkg in route.packages:
         if pkg.address_status == "ready" or not pkg.address_text:
             continue
-        query = full_address(pkg.address_text, pkg.city, pkg.state, pkg.postal_code)
         try:
-            hit = geocoder.geocode(query)
+            hit = _geocode_with_fallback(geocoder, pkg)
         except httpx.HTTPError:
             break  # fornecedor indisponível: mantém o restante pendente para nova tentativa
         if hit is None:
@@ -128,7 +219,10 @@ def geocode_route(
         route.status = "validated"
     db.commit()
     return GeocodeResult(
-        geocoded=counts["ready"], not_found=counts["not_found"], pending=counts["pending_review"]
+        geocoded=counts["ready"],
+        not_found=counts["not_found"],
+        pending=counts["pending_review"],
+        start_found=start_found,
     )
 
 
@@ -139,10 +233,18 @@ def optimize_route(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
+    geocoder: Geocoder = Depends(get_geocoder),
 ):
     route = get_owned_route(db, route_id, user)
-    if route.start_lat is None or route.start_lng is None:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Defina o ponto inicial da rota")
+    if body is not None and body.start_lat is not None and body.start_lng is not None:
+        route.start_lat, route.start_lng = body.start_lat, body.start_lng
+    elif body is not None and body.start_address:
+        route.start_address, route.start_lat, route.start_lng = body.start_address, None, None
+    if not _resolve_start(route, geocoder):
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            "Defina um endereço de partida válido para a rota",
+        )
 
     usable = [
         p

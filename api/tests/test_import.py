@@ -98,4 +98,68 @@ def test_import_job_failure_is_recorded(client, auth, route_id):
         headers=auth,
     ).json()
     assert job["status"] == "failed"
-    assert "Formato" in job["error_summary"]["message"]
+    assert "PDF inválido" in job["error_summary"]["message"]
+
+
+def _pdf_with_lines(*lines: str) -> bytes:
+    """PDF mínimo válido: uma página Helvetica com as linhas dadas (sem acentos)."""
+    ops = "BT /F1 12 Tf 14 TL 50 750 Td " + " ".join(f"({t}) Tj T*" for t in lines) + " ET"
+    objects = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] "
+        b"/Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>",
+        f"<< /Length {len(ops)} >>\nstream\n{ops}\nendstream".encode(),
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+    ]
+    out = io.BytesIO()
+    out.write(b"%PDF-1.4\n")
+    offsets = []
+    for i, obj in enumerate(objects, 1):
+        offsets.append(out.tell())
+        out.write(f"{i} 0 obj\n".encode() + obj + b"\nendobj\n")
+    xref = out.tell()
+    out.write(f"xref\n0 {len(objects) + 1}\n".encode())
+    out.write(b"0000000000 65535 f \n")
+    for off in offsets:
+        out.write(f"{off:010d} 00000 n \n".encode())
+    out.write(
+        f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF".encode()
+    )
+    return out.getvalue()
+
+
+def test_parse_pdf_romaneio():
+    pdf = _pdf_with_lines(
+        "ROMANEIO DE ENTREGAS",
+        "Pedido: MLB998877",
+        "Rua Augusta, 1500 - Sao Paulo/SP",
+        "CEP: 01304-001",
+        "PKG-223344",
+        "Av. Paulista, 1578",
+        "Sao Paulo - SP",
+        "Obs: entregar na portaria",
+    )
+    parsed = parse_import("romaneio.pdf", pdf)
+    assert len(parsed.rows) == 2
+    first, second = parsed.rows
+    assert first["tracking_code"] == "MLB998877"
+    assert first["address"] == "Rua Augusta, 1500"
+    assert first["city"] == "Sao Paulo"
+    assert first["state"] == "SP"
+    assert first["postal_code"] == "01304-001"
+    assert second["tracking_code"] == "PKG-223344"
+    assert second["address"] == "Av. Paulista, 1578"
+    assert second["delivery_notes"] == "entregar na portaria"
+
+
+def test_parse_pdf_without_addresses():
+    pdf = _pdf_with_lines("Relatorio de vendas", "Total: 42 itens")
+    with pytest.raises(ImportFileError):
+        parse_import("relatorio.pdf", pdf)
+
+
+def test_parse_pdf_rejects_column_mapping():
+    pdf = _pdf_with_lines("Rua A, 1")
+    with pytest.raises(ImportFileError):
+        parse_import("x.pdf", pdf, mapping={"address": "Endereço"})

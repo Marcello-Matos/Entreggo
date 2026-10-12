@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../auth/auth_service.dart';
-import '../theme.dart';
+import '../widgets/google_button.dart';
+import '../widgets/logo.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key, required this.auth});
@@ -26,7 +27,10 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  Future<void> _run(Future<void> Function() action, [String? success]) async {
+  Future<void> _run(
+    Future<Object?> Function() action, [
+    String? success,
+  ]) async {
     setState(() => _busy = true);
     final messenger = ScaffoldMessenger.of(context);
     try {
@@ -35,7 +39,7 @@ class _LoginScreenState extends State<LoginScreen> {
         messenger.showSnackBar(SnackBar(content: Text(success)));
       }
     } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text('Não foi possível: $e')));
+      messenger.showSnackBar(SnackBar(content: Text('$e')));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -45,10 +49,7 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!_formKey.currentState!.validate()) return;
     final email = _email.text.trim();
     _signUp
-        ? _run(
-            () => widget.auth.signUp(email, _password.text),
-            'Conta criada. Verifique seu e-mail para confirmar.',
-          )
+        ? _run(() => widget.auth.signUp(email, _password.text), 'Conta criada!')
         : _run(() => widget.auth.signIn(email, _password.text));
   }
 
@@ -80,26 +81,8 @@ class _LoginScreenState extends State<LoginScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Icon(
-                    Icons.route_rounded,
-                    size: 64,
-                    color: EntreggoColors.primary,
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    'Entreggo',
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                      fontWeight: FontWeight.w800,
-                      color: EntreggoColors.navy,
-                    ),
-                  ),
-                  const Text(
-                    'Sua rota. Otimizada.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: EntreggoColors.slate),
-                  ),
-                  const SizedBox(height: 32),
+                  const EntreggoLogo(markWidth: 128),
+                  const SizedBox(height: 40),
                   TextFormField(
                     controller: _email,
                     keyboardType: TextInputType.emailAddress,
@@ -124,6 +107,13 @@ class _LoginScreenState extends State<LoginScreen> {
                     onPressed: _busy ? null : _submit,
                     child: Text(_signUp ? 'Criar conta' : 'Entrar'),
                   ),
+                  const OrDivider(),
+                  GoogleSignInButton(
+                    onPressed: _busy
+                        ? null
+                        : () => _run(widget.auth.signInWithGoogle),
+                  ),
+                  const SizedBox(height: 8),
                   TextButton(
                     onPressed: _busy
                         ? null

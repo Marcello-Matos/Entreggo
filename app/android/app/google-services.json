@@ -1,0 +1,46 @@
+{
+  "project_info": {
+    "project_number": "789811825272",
+    "project_id": "entreggo-cfef5",
+    "storage_bucket": "entreggo-cfef5.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:789811825272:android:c2e607353f71d89fd4bb8d",
+        "android_client_info": {
+          "package_name": "br.com.entreggo.entreggo"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "789811825272-doqormr0td0fldc95nb7iv1girsv3jgp.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB4q6f_dT5dw_2Y3JWEtPgcv2ncehstn-0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "789811825272-doqormr0td0fldc95nb7iv1girsv3jgp.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "789811825272-6da6rlr8ak78t8femb7m9qv39lhmeac4.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "br.com.entreggo.entreggo"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

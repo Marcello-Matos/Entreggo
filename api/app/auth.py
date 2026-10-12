@@ -1,6 +1,3 @@
-import uuid
-from functools import lru_cache
-
 import jwt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -12,21 +9,32 @@ from app.models import User
 
 bearer = HTTPBearer(auto_error=False)
 
+FIREBASE_JWKS_URL = (
+    "https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com"
+)
+_jwks_client = jwt.PyJWKClient(FIREBASE_JWKS_URL, cache_keys=True)
 
-@lru_cache
-def _jwks_client(supabase_url: str) -> jwt.PyJWKClient:
-    return jwt.PyJWKClient(f"{supabase_url.rstrip('/')}/auth/v1/.well-known/jwks.json")
+
+def get_signing_key(token: str):
+    return _jwks_client.get_signing_key_from_jwt(token).key
 
 
 def decode_token(token: str, settings: Settings) -> dict:
-    alg = jwt.get_unverified_header(token).get("alg")
-    if alg == "HS256" and settings.supabase_jwt_secret:
-        key = settings.supabase_jwt_secret
-    elif alg in ("RS256", "ES256") and settings.supabase_url:
-        key = _jwks_client(settings.supabase_url).get_signing_key_from_jwt(token).key
-    else:
-        raise jwt.InvalidTokenError(f"Algoritmo não suportado: {alg}")
-    return jwt.decode(token, key, algorithms=[alg], audience=settings.jwt_audience)
+    """Valida um ID token do Firebase Authentication (RS256, chaves públicas do Google)."""
+    project = settings.firebase_project_id
+    if not project:
+        raise jwt.InvalidTokenError("FIREBASE_PROJECT_ID não configurado")
+    claims = jwt.decode(
+        token,
+        get_signing_key(token),
+        algorithms=["RS256"],
+        audience=project,
+        issuer=f"https://securetoken.google.com/{project}",
+        options={"require": ["exp", "iat", "sub"]},
+    )
+    if not claims["sub"] or len(claims["sub"]) > 128:
+        raise jwt.InvalidTokenError("sub inválido")
+    return claims
 
 
 def get_current_user(
@@ -38,13 +46,12 @@ def get_current_user(
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Autenticação necessária")
     try:
         claims = decode_token(credentials.credentials, settings)
-        user_id = uuid.UUID(claims["sub"])
-    except (jwt.PyJWTError, KeyError, ValueError) as exc:
+    except jwt.PyJWTError as exc:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Token inválido") from exc
 
-    user = db.get(User, user_id)
+    user = db.get(User, claims["sub"])
     if user is None:
-        user = User(id=user_id, email=claims.get("email"))
+        user = User(id=claims["sub"], email=claims.get("email"))
         db.add(user)
         db.commit()
     if user.status != "active":

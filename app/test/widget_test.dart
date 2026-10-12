@@ -22,12 +22,20 @@ class FakeAuth implements AuthService {
   @override
   bool get isSignedIn => signedIn;
   @override
-  String? get accessToken => signedIn ? 'token' : null;
+  Future<String?> getToken() async => signedIn ? 'token' : null;
   @override
   Future<void> signIn(String email, String password) async {
     lastEmail = email;
     signedIn = true;
     _changes.add(true);
+  }
+
+  @override
+  Future<bool> signInWithGoogle() async {
+    lastEmail = 'google';
+    signedIn = true;
+    _changes.add(true);
+    return true;
   }
 
   @override
@@ -43,7 +51,7 @@ class FakeAuth implements AuthService {
 
 ApiClient fakeApi(List<Map<String, dynamic>> routes) => ApiClient(
   baseUrl: 'http://api.test',
-  tokenProvider: () => 'token',
+  tokenProvider: () async => 'token',
   httpClient: MockClient((req) async {
     expect(req.headers['Authorization'], 'Bearer token');
     return http.Response.bytes(
@@ -78,9 +86,20 @@ void main() {
     await tester.tap(find.text('Entrar'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Minhas rotas'), findsOneWidget);
+    expect(find.text('Iniciar entregas de hoje'), findsOneWidget);
     expect(find.text('Centro'), findsOneWidget);
     expect(find.text('Otimizada'), findsOneWidget);
+  });
+
+  testWidgets('botão do Google faz login', (tester) async {
+    final auth = FakeAuth();
+    await tester.pumpWidget(EntreggoApp(auth: auth, api: fakeApi([])));
+
+    await tester.tap(find.text('Continuar com o Google'));
+    await tester.pumpAndSettle();
+
+    expect(auth.lastEmail, 'google');
+    expect(find.text('Iniciar entregas de hoje'), findsOneWidget);
   });
 
   test('RouteDetail ordena pacotes pela sequência sugerida', () {
@@ -104,7 +123,7 @@ void main() {
   test('ApiClient converte erro 409 em duplicidade', () async {
     final api = ApiClient(
       baseUrl: 'http://api.test',
-      tokenProvider: () => 'token',
+      tokenProvider: () async => 'token',
       httpClient: MockClient(
         (_) async => http.Response.bytes(
           utf8.encode(

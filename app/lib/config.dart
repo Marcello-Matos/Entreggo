@@ -1,14 +1,8 @@
 /// Configuração injetada em build/run via `--dart-define` (ou `--dart-define-from-file`).
+/// As credenciais do Firebase ficam em `firebase_options.dart` (gerado pelo `flutterfire configure`).
 class AppConfig {
   static const apiBaseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'http://localhost:8000',
+    defaultValue: 'http://localhost:8001',
   );
-  static const supabaseUrl = String.fromEnvironment('SUPABASE_URL');
-  static const supabasePublishableKey = String.fromEnvironment(
-    'SUPABASE_PUBLISHABLE_KEY',
-  );
-
-  static bool get hasSupabase =>
-      supabaseUrl.isNotEmpty && supabasePublishableKey.isNotEmpty;
 }

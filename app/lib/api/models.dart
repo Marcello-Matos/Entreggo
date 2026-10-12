@@ -3,6 +3,8 @@ class DeliveryRoute {
     required this.id,
     required this.title,
     required this.status,
+    required this.createdAt,
+    this.startAddress,
     this.startLat,
     this.startLng,
   });
@@ -11,6 +13,10 @@ class DeliveryRoute {
     id: j['id'] as String,
     title: j['title'] as String,
     status: j['status'] as String,
+    createdAt:
+        DateTime.tryParse(j['created_at'] as String? ?? '')?.toLocal() ??
+        DateTime.now(),
+    startAddress: j['start_address'] as String?,
     startLat: (j['start_lat'] as num?)?.toDouble(),
     startLng: (j['start_lng'] as num?)?.toDouble(),
   );
@@ -18,8 +24,37 @@ class DeliveryRoute {
   final String id;
   final String title;
   final String status;
+  final DateTime createdAt;
+  final String? startAddress;
   final double? startLat;
   final double? startLng;
+
+  bool get isFinished => status == 'completed' || status == 'archived';
+}
+
+/// Dados de endereço enviados ao criar/corrigir um pacote.
+class AddressInput {
+  const AddressInput({
+    required this.address,
+    this.city,
+    this.state,
+    this.postalCode,
+    this.notes,
+  });
+
+  final String address;
+  final String? city;
+  final String? state;
+  final String? postalCode;
+  final String? notes;
+
+  Map<String, dynamic> toJson() => {
+    'address_text': address,
+    'city': city,
+    'state': state,
+    'postal_code': postalCode,
+    'delivery_notes': notes,
+  };
 }
 
 class Package {
@@ -30,6 +65,11 @@ class Package {
     this.trackingCode,
     this.addressText,
     this.city,
+    this.state,
+    this.postalCode,
+    this.deliveryNotes,
+    this.lat,
+    this.lng,
   });
 
   factory Package.fromJson(Map<String, dynamic> j) => Package(
@@ -39,6 +79,11 @@ class Package {
     trackingCode: j['tracking_code'] as String?,
     addressText: j['address_text'] as String?,
     city: j['city'] as String?,
+    state: j['state'] as String?,
+    postalCode: j['postal_code'] as String?,
+    deliveryNotes: j['delivery_notes'] as String?,
+    lat: (j['lat'] as num?)?.toDouble(),
+    lng: (j['lng'] as num?)?.toDouble(),
   );
 
   final String id;
@@ -47,6 +92,19 @@ class Package {
   final String? trackingCode;
   final String? addressText;
   final String? city;
+  final String? state;
+  final String? postalCode;
+  final String? deliveryNotes;
+  final double? lat;
+  final double? lng;
+
+  bool get hasCoordinates => lat != null && lng != null;
+
+  /// "Rua X, 120 — São Paulo/SP"
+  String get displayAddress => [
+    addressText ?? 'Sem endereço',
+    if (city != null) state != null ? '$city/$state' : city!,
+  ].join(' — ');
 }
 
 class RouteDetail {
@@ -87,4 +145,18 @@ class RouteDetail {
     );
     return list;
   }
+
+  /// Paradas da rota otimizada, na ordem de entrega.
+  List<Package> get stops =>
+      orderedPackages.where((p) => sequence.containsKey(p.id)).toList();
+
+  bool get isOptimized =>
+      optimization != null &&
+      sequence.isNotEmpty &&
+      (route.status == 'optimized' ||
+          route.status == 'in_progress' ||
+          route.status == 'completed');
+
+  int get missingAddress =>
+      packages.where((p) => p.addressStatus != 'ready').length;
 }
