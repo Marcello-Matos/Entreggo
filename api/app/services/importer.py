@@ -32,14 +32,28 @@ PDF_MAGIC = b"%PDF"
 
 # Padrões de romaneio/lista de entrega em PDF (texto livre, sem colunas garantidas).
 _STREET = re.compile(
-    r"^(?:rua|r\.|avenida|av\.?|estrada|estr\.|rodovia|rod\.?|travessa|trav\.?|tv\.|"
-    r"alameda|al\.?|pra[cç]a|p[cç]a\.?|largo|lgo\.?|beco|bc\.|quadra|qd\.?|viela|vl\.|"
-    r"caminho|boulevard|blvd\.?|setor|loteamento|condom[ií]nio)\b[\s.,]",
+    r"^(?:(?:rua|avenida|av|estrada|rodovia|rod|travessa|trav|tv|alameda|al|pra[cç]a|"
+    r"p[cç]a|largo|lgo|beco|quadra|qd|viela|caminho|boulevard|blvd|setor|loteamento|"
+    r"condom[ií]nio|ladeira|marginal|servid[aã]o)\b|(?:r|av|estr|rod|trav|tv|al|p[cç]a|"
+    r"lgo|bc|qd|vl|blvd)\.)\s*[\wÀ-ÿ]",
     re.IGNORECASE,
 )
+# UF só em maiúsculas, para não confundir "Pa"/"Al" do fim de um nome com estado.
+_UFS = "(?-i:AC|AL|AP|AM|BA|CE|DF|ES|GO|MA|MT|MS|MG|PA|PB|PR|PE|PI|RJ|RN|RS|RO|RR|SC|SP|SE|TO)"
+_CITY = r"[A-Za-zÀ-ÖØ-öø-ÿ'][A-Za-zÀ-ÖØ-öø-ÿ' .]*?"
 _CEP = re.compile(r"\bcep\b[:\s.\-]*(\d{5}-?\d{3})|\b(\d{5}-\d{3})\b", re.IGNORECASE)
-_CITY_UF_TAIL = re.compile(r"[-–,]\s*([A-Za-zÀ-ÖØ-öø-ÿ' ]{2,}?)\s*/\s*([A-Z]{2})\s*$")
-_CITY_UF_LINE = re.compile(r"^([A-Za-zÀ-ÖØ-öø-ÿ' .]{2,}?)\s*[-/]\s*([A-Z]{2})$")
+_CEP_ANY = re.compile(r"(?:\bcep\b[:\s.\-]*)?\b(\d{5}-?\d{3})\b", re.IGNORECASE)
+# "..., Osasco/SP" | "... - Osasco - SP" | "..., Osasco, SP"
+_CITY_UF_TAIL = re.compile(rf"[-,]\s*({_CITY})\s*(?:/|\s-\s|,)\s*({_UFS})\s*$", re.IGNORECASE)
+# linha de tabela sem separadores: "..., 136 Osasco SP"
+_CITY_UF_BARE_TAIL = re.compile(rf"(\d+[A-Za-z]?|s/?n)\s+({_CITY})\s+({_UFS})\s*$", re.IGNORECASE)
+_CITY_UF_LINE = re.compile(rf"^({_CITY})\s*[-/,]\s*({_UFS})$", re.IGNORECASE)
+_LIST_NUMBER = re.compile(r"^\s*(?:n[ºo°]\s*)?\d{1,4}\s*(?:[.)\-:]\s*|\s+)(?=\D)")
+_ADDRESS_LABEL = re.compile(
+    r"^(?:endere[cç]o(?:\s+de\s+entrega)?|end\.|destino|logradouro|entregar\s+em)\s*[:\-]\s*",
+    re.IGNORECASE,
+)
+_LEADING_CODE = re.compile(r"^([A-Z]{2,}[\w\-]*\d{6,}[A-Z]*|\d{9,})\s+(?=\D)", re.IGNORECASE)
 _LABELED_CODE = re.compile(
     r"(?:pedido|pacote|c[oó]d(?:igo)?\.?|rastreio|tracking|ordem)\b"
     r"\s*[:#nºo°.\-]*\s*([A-Z0-9][\w\-]{5,})",
@@ -95,21 +109,47 @@ def _read_table(filename: str, content: bytes) -> list[list[str]]:
     raise ImportFileError("Formato não suportado: envie um arquivo CSV, XLSX ou PDF válido")
 
 
+def split_address_line(line: str) -> dict[str, str | None] | None:
+    """Interpreta uma linha de endereço em vários formatos: numeração de lista,
+    rótulo "Endereço:", código de rastreio na frente, CEP e cidade/UF na mesma
+    linha (com "/", "-", "," ou só espaços), separador ";" e caixa alta.
+    Retorna `None` se a linha não começar por um logradouro."""
+    text = re.sub(r"\s+", " ", _DASHES.sub(" - ", line.replace(";", ","))).strip()
+    text = _ADDRESS_LABEL.sub("", _LIST_NUMBER.sub("", text, count=1), count=1)
+    rec: dict[str, str | None] = {}
+    code = _LEADING_CODE.match(text)
+    if code and _STREET.match(text[code.end() :]):
+        rec["tracking_code"], text = code.group(1), text[code.end() :]
+    if not _STREET.match(text):
+        return None
+
+    cep = _CEP_ANY.search(text)
+    if cep:
+        rec["postal_code"] = cep.group(1)
+        text = (text[: cep.start()] + text[cep.end() :]).strip(" ,-")
+    if tail := _CITY_UF_TAIL.search(text):
+        rec["city"], rec["state"] = tail.group(1).strip(" ."), tail.group(2).upper()
+        text = text[: tail.start()]
+    elif bare := _CITY_UF_BARE_TAIL.search(text):
+        rec["city"], rec["state"] = bare.group(2).strip(" ."), bare.group(3).upper()
+        text = text[: bare.end(1)]
+    text = text.strip(" ,-")
+    rec["address"] = text.title() if text.isupper() else text
+    if rec.get("city") and rec["city"].isupper():
+        rec["city"] = rec["city"].title()
+    return rec
+
+
 def parse_pdf_lines(lines: list[str]) -> list[dict[str, str | None]]:
     """Extrai registros de um romaneio em texto: cada linha de logradouro inicia um
     registro e cada linha vizinha (até 4 de distância) é atribuída ao logradouro
     mais próximo, fornecendo CEP, cidade/UF, código de rastreio e observação."""
     lines = [_DASHES.sub(" - ", line) for line in lines]
-    streets = [i for i, line in enumerate(lines) if _STREET.match(line)]
     records: dict[int, dict[str, str | None]] = {}
-    for i in streets:
-        line = lines[i]
-        rec: dict[str, str | None] = {"address": line}
-        tail = _CITY_UF_TAIL.search(line)
-        if tail:
-            rec["address"] = line[: tail.start()].rstrip(" ,-")
-            rec["city"], rec["state"] = tail.group(1).strip(), tail.group(2)
-        records[i] = rec
+    for i, line in enumerate(lines):
+        if (rec := split_address_line(line)) is not None:
+            records[i] = rec
+    streets = list(records)
 
     for j, near in enumerate(lines):
         if j in records:
@@ -127,9 +167,9 @@ def parse_pdf_lines(lines: list[str]) -> list[dict[str, str | None]]:
         if labeled:
             rec.setdefault("tracking_code", labeled.group(1))
             continue
-        city = _CITY_UF_LINE.match(near)
+        city = _CITY_UF_LINE.match(near.strip())
         if city and rec.get("city") is None:
-            rec["city"], rec["state"] = city.group(1).strip(), city.group(2)
+            rec["city"], rec["state"] = city.group(1).strip(" ."), city.group(2).upper()
             continue
         if _BARE_CODE.match(near):
             rec.setdefault("tracking_code", near)
@@ -213,6 +253,12 @@ def parse_import(
         if not row.get("tracking_code") and not row.get("address"):
             result.errors.append({"line": line_no, "message": "Linha sem código e sem endereço"})
             continue
+        # Endereço completo numa célula só: separa cidade/UF/CEP que não vieram em colunas.
+        if row.get("address") and (split := split_address_line(row["address"])):
+            row["address"] = split["address"]
+            for key in ("city", "state", "postal_code", "tracking_code"):
+                if split.get(key) and not row.get(key):
+                    row[key] = split[key]
         if row.get("postal_code"):
             cep = normalize_postal_code(row["postal_code"])
             if cep is None:

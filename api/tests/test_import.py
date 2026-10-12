@@ -178,3 +178,48 @@ def test_parse_pdf_numbered_table_keeps_each_cep_with_its_address():
     assert [(r["address"], r["postal_code"]) for r in rows] == expected
     assert all(r["city"] == "Osasco" and r["state"] == "SP" for r in rows)
     assert all(r.get("tracking_code") is None for r in rows)
+
+
+@pytest.mark.parametrize(
+    "lines",
+    [
+        ["1", "Rua Anastacia Jachimov, 136 — Osasco/SP", "06290-180"],
+        ["Rua Anastacia Jachimov, 136 - Osasco/SP - 06290-180"],
+        ["1. Rua Anastacia Jachimov, 136 - Osasco/SP", "CEP 06290-180"],
+        ["1 Rua Anastacia Jachimov, 136 Osasco SP 06290-180"],
+        ["Endereço: Rua Anastacia Jachimov, 136", "Osasco - SP", "06290-180"],
+        ["Rua Anastacia Jachimov, 136 - Centro - Osasco - SP", "06290-180"],
+        ["Rua Anastacia Jachimov, 136, Centro, Osasco, SP, 06290-180"],
+        ["Rua Anastacia Jachimov, 136 - Osasco/SP", "CEP: 06290180"],
+        ["MLB123456789 Rua Anastacia Jachimov, 136 - Osasco/SP 06290-180"],
+        ["R. ANASTACIA JACHIMOV, 136 - OSASCO/SP", "06290-180"],
+        ["Rua Anastacia Jachimov; 136; Centro; Osasco; SP; 06290-180"],
+    ],
+    ids=[
+        "travessao",
+        "cep-mesma-linha",
+        "numero-lista",
+        "linha-tabela",
+        "rotulo-endereco",
+        "cidade-hifen",
+        "cidade-virgula",
+        "cep-sem-hifen",
+        "codigo-na-frente",
+        "abreviado-caixa-alta",
+        "ponto-e-virgula",
+    ],
+)
+def test_pdf_address_formats(lines):
+    from app.services.importer import normalize_postal_code, parse_pdf_lines
+
+    (row,) = parse_pdf_lines(lines)
+    assert row["address"].lower().startswith(("rua anastacia jachimov, 136", "r. anastacia"))
+    assert (row["city"], row["state"]) == ("Osasco", "SP")
+    assert normalize_postal_code(row["postal_code"]) == "06290-180"
+
+
+def test_csv_full_address_in_one_cell():
+    content = b"codigo;endereco\nA1;AV. PAULISTA, 1578, SAO PAULO, SP, 01310200\n"
+    (row,) = parse_import("a.csv", content).rows
+    assert row["address"] == "Av. Paulista, 1578"
+    assert (row["city"], row["state"], row["postal_code"]) == ("Sao Paulo", "SP", "01310-200")
