@@ -15,7 +15,7 @@ def _database_url() -> str:
     aspas acidentais e completa o driver psycopg quando ausente."""
     url = get_settings().database_url.strip().strip("\"'")
     if url.startswith("postgresql://"):
-        url = f"postgresql+psycopg://{url[len('postgresql://'):]}"
+        url = f"postgresql+psycopg://{url[len('postgresql://') :]}"
     return url
 
 

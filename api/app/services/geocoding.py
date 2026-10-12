@@ -28,6 +28,9 @@ class GoogleGeocoder:
     def __init__(self, api_key: str):
         self.api_key = api_key
 
+    def geocode_cep(self, postal_code: str) -> GeocodeHit | None:
+        return cep_lookup(postal_code)
+
     def geocode(self, address: str) -> GeocodeHit | None:
         resp = httpx.get(
             self.URL,
@@ -60,6 +63,9 @@ class NominatimGeocoder:
         self.url = url
         self.headers = {"User-Agent": f"Entreggo/0.1 ({contact or 'desenvolvimento'})"}
 
+    def geocode_cep(self, postal_code: str) -> GeocodeHit | None:
+        return cep_lookup(postal_code)
+
     def geocode(self, address: str) -> GeocodeHit | None:
         wait = NominatimGeocoder._last_call + self.MIN_INTERVAL_S - time.monotonic()
         if wait > 0:
@@ -83,6 +89,34 @@ class NominatimGeocoder:
             provider="nominatim",
             queried_at=datetime.now(UTC).isoformat(),
         )
+
+
+CEP_URL = "https://cep.awesomeapi.com.br/json/{cep}"
+# Coordenada genérica devolvida quando o serviço não sabe localizar o CEP.
+_BRAZIL_CENTROID = (-14.235, -51.925)
+
+
+def cep_lookup(postal_code: str) -> GeocodeHit | None:
+    """Último recurso: coordenada do trecho de rua do CEP (sem precisão de número)."""
+    digits = "".join(c for c in postal_code if c.isdigit())
+    if len(digits) != 8:
+        return None
+    try:
+        resp = httpx.get(CEP_URL.format(cep=digits), timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
+        lat, lng = float(data["lat"]), float(data["lng"])
+    except (httpx.HTTPError, KeyError, TypeError, ValueError):
+        return None  # fallback opcional: falha aqui não interrompe a validação
+    if abs(lat - _BRAZIL_CENTROID[0]) < 0.01 and abs(lng - _BRAZIL_CENTROID[1]) < 0.01:
+        return None
+    return GeocodeHit(
+        lat=lat,
+        lng=lng,
+        confidence="cep",
+        provider="awesomeapi-cep",
+        queried_at=datetime.now(UTC).isoformat(),
+    )
 
 
 def full_address(

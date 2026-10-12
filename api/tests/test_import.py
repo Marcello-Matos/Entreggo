@@ -163,3 +163,18 @@ def test_parse_pdf_rejects_column_mapping():
     pdf = _pdf_with_lines("Rua A, 1")
     with pytest.raises(ImportFileError):
         parse_import("x.pdf", pdf, mapping={"address": "Endereço"})
+
+
+def test_parse_pdf_numbered_table_keeps_each_cep_with_its_address():
+    # Layout real: "Nº / Logradouro — bairro, cidade/UF / CEP", com travessão.
+    from app.services.importer import parse_pdf_lines
+
+    lines = ["Nº", "Logradouro / município", "CEP"]
+    expected = []
+    for n in range(1, 31):
+        lines += [str(n), f"Rua Teste {n}, {n * 10} — Centro, Osasco/SP", f"06{n:03d}-000"]
+        expected.append((f"Rua Teste {n}, {n * 10} - Centro", f"06{n:03d}-000"))
+    rows = parse_pdf_lines(lines)
+    assert [(r["address"], r["postal_code"]) for r in rows] == expected
+    assert all(r["city"] == "Osasco" and r["state"] == "SP" for r in rows)
+    assert all(r.get("tracking_code") is None for r in rows)

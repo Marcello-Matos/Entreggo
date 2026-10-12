@@ -45,7 +45,10 @@ _LABELED_CODE = re.compile(
     r"\s*[:#nºo°.\-]*\s*([A-Z0-9][\w\-]{5,})",
     re.IGNORECASE,
 )
-_BARE_CODE = re.compile(r"^(?=.{8,}$)[A-Z0-9][A-Z0-9\-]*\d[A-Z0-9\-]*$", re.IGNORECASE)
+_BARE_CODE = re.compile(
+    r"^(?!\d{5}-?\d{3}$)(?=.{8,}$)[A-Z0-9][A-Z0-9\-]*\d[A-Z0-9\-]*$", re.IGNORECASE
+)
+_DASHES = re.compile(r"\s*[–—]\s*")
 _NOTE = re.compile(r"^obs(?:erva[çc][ãa]o)?\.?\s*[:.\-]?\s*(.+)", re.IGNORECASE)
 
 
@@ -94,48 +97,47 @@ def _read_table(filename: str, content: bytes) -> list[list[str]]:
 
 def parse_pdf_lines(lines: list[str]) -> list[dict[str, str | None]]:
     """Extrai registros de um romaneio em texto: cada linha de logradouro inicia um
-    registro e as linhas vizinhas (até 4 para cada lado) fornecem CEP, cidade/UF,
-    código de rastreio e observação."""
-    used: set[int] = set()
-    records: list[dict[str, str | None]] = []
-    for i, line in enumerate(lines):
-        if i in used or not _STREET.match(line):
-            continue
-        used.add(i)
+    registro e cada linha vizinha (até 4 de distância) é atribuída ao logradouro
+    mais próximo, fornecendo CEP, cidade/UF, código de rastreio e observação."""
+    lines = [_DASHES.sub(" - ", line) for line in lines]
+    streets = [i for i, line in enumerate(lines) if _STREET.match(line)]
+    records: dict[int, dict[str, str | None]] = {}
+    for i in streets:
+        line = lines[i]
         rec: dict[str, str | None] = {"address": line}
         tail = _CITY_UF_TAIL.search(line)
         if tail:
-            rec["address"] = line[: tail.start()].rstrip(" ,-–")
+            rec["address"] = line[: tail.start()].rstrip(" ,-")
             rec["city"], rec["state"] = tail.group(1).strip(), tail.group(2)
-        for j in range(max(0, i - 4), min(len(lines), i + 5)):
-            if j == i or j in used:
-                continue
-            near = lines[j]
-            cep = _CEP.search(near)
-            if cep and rec.get("postal_code") is None:
-                rec["postal_code"] = cep.group(1) or cep.group(2)
-                used.add(j)
-                continue
-            labeled = _LABELED_CODE.search(near)
-            if labeled and rec.get("tracking_code") is None:
-                rec["tracking_code"] = labeled.group(1)
-                used.add(j)
-                continue
-            city = _CITY_UF_LINE.match(near)
-            if city and rec.get("city") is None:
-                rec["city"], rec["state"] = city.group(1).strip(), city.group(2)
-                used.add(j)
-                continue
-            if rec.get("tracking_code") is None and _BARE_CODE.match(near):
-                rec["tracking_code"] = near
-                used.add(j)
-                continue
-            note = _NOTE.match(near)
-            if note and rec.get("delivery_notes") is None:
-                rec["delivery_notes"] = note.group(1).strip()
-                used.add(j)
-        records.append(rec)
-    return records
+        records[i] = rec
+
+    for j, near in enumerate(lines):
+        if j in records:
+            continue
+        # empate de distância fica com o logradouro de cima (CEP/cidade vêm depois dele)
+        owner = min(streets, key=lambda s: (abs(s - j), s > j), default=None)
+        if owner is None or abs(owner - j) > 4:
+            continue
+        rec = records[owner]
+        cep = _CEP.search(near)
+        if cep:
+            rec.setdefault("postal_code", cep.group(1) or cep.group(2))
+            continue
+        labeled = _LABELED_CODE.search(near)
+        if labeled:
+            rec.setdefault("tracking_code", labeled.group(1))
+            continue
+        city = _CITY_UF_LINE.match(near)
+        if city and rec.get("city") is None:
+            rec["city"], rec["state"] = city.group(1).strip(), city.group(2)
+            continue
+        if _BARE_CODE.match(near):
+            rec.setdefault("tracking_code", near)
+            continue
+        note = _NOTE.match(near)
+        if note:
+            rec.setdefault("delivery_notes", note.group(1).strip())
+    return list(records.values())
 
 
 def _parse_pdf(content: bytes, max_rows: int) -> ParsedImport:

@@ -153,24 +153,29 @@ def scan_package(
 
 def _street_part(address: str) -> str:
     """'Rua X, 300 - Bairro, Cidade - UF' -> 'Rua X, 300'."""
-    return re.split(r"\s+-\s+", address, maxsplit=1)[0].strip(" ,")
+    return re.split(r"\s+[-–—]\s+", address, maxsplit=1)[0].strip(" ,")
 
 
 def _geocode_with_fallback(geocoder: Geocoder, pkg: Package) -> GeocodeHit | None:
     """Tenta o endereço completo e, se falhar, variações mais simples
-    (só logradouro + cidade/UF, depois logradouro + CEP)."""
-    candidates = [
-        full_address(pkg.address_text, pkg.city, pkg.state, pkg.postal_code)
-    ]
+    (logradouro + cidade/UF, logradouro + CEP, logradouro sem número) e, por
+    último, a coordenada do trecho de rua pelo CEP."""
+    candidates = [full_address(pkg.address_text, pkg.city, pkg.state, pkg.postal_code)]
     street = _street_part(pkg.address_text or "")
     if street != (pkg.address_text or "").strip():
         candidates.append(full_address(street, pkg.city, pkg.state))
     if pkg.postal_code:
         candidates.append(full_address(street, pkg.city, pkg.postal_code))
+    street_name = re.sub(r",\s*(?:\d+\w?|s/?n)\b.*$", "", street, flags=re.IGNORECASE)
+    if street_name != street:
+        candidates.append(full_address(street_name, pkg.city, pkg.state))
     for query in dict.fromkeys(candidates):
         hit = geocoder.geocode(query)
         if hit is not None:
             return hit
+    cep_fallback = getattr(geocoder, "geocode_cep", None)
+    if pkg.postal_code and cep_fallback is not None:
+        return cep_fallback(pkg.postal_code)
     return None
 
 

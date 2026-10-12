@@ -58,3 +58,41 @@ def test_geocode_fallback_tries_simpler_queries():
     )
     assert _geocode_with_fallback(Stub(), pkg) is not None
     assert len(calls) == 3  # completo -> rua+cidade -> rua+cep
+
+
+def test_cep_lookup(monkeypatch):
+    def fake_get(url, timeout):
+        payload = (
+            {"lat": "-14.2350040", "lng": "-51.9252800"}  # centro do Brasil = desconhecido
+            if "06110002" in url
+            else {"lat": "-23.6702405", "lng": "-46.5433941"}
+        )
+        return httpx.Response(200, json=payload, request=httpx.Request("GET", url))
+
+    monkeypatch.setattr(geocoding.httpx, "get", fake_get)
+    hit = geocoding.cep_lookup("09050-130")
+    assert (hit.lat, hit.provider) == (-23.6702405, "awesomeapi-cep")
+    assert geocoding.cep_lookup("06110-002") is None
+    assert geocoding.cep_lookup("123") is None
+
+
+def test_geocode_falls_back_to_cep():
+    from types import SimpleNamespace
+
+    from app.routers.routes import _geocode_with_fallback
+    from app.services.geocoding import GeocodeHit
+
+    class Stub:
+        def geocode(self, query):
+            return None
+
+        def geocode_cep(self, cep):
+            return GeocodeHit(-23.6, -46.5, "cep", "fake", "2026-01-01T00:00:00Z")
+
+    pkg = SimpleNamespace(
+        address_text="Rua Quirino Motta, 100 - Vila Floresta",
+        city="Santo André",
+        state="SP",
+        postal_code="09050-130",
+    )
+    assert _geocode_with_fallback(Stub(), pkg).confidence == "cep"
