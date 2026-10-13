@@ -16,11 +16,13 @@ class HomeScreen extends StatefulWidget {
     super.key,
     required this.api,
     required this.auth,
+    required this.theme,
     required this.onSignOut,
   });
 
   final ApiClient api;
   final AuthService auth;
+  final ThemeController theme;
   final VoidCallback onSignOut;
 
   @override
@@ -90,6 +92,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   _Header(
                     api: widget.api,
                     auth: widget.auth,
+                    theme: widget.theme,
                     onSignOut: widget.onSignOut,
                   ),
                   const SizedBox(height: 16),
@@ -181,11 +184,13 @@ class _Header extends StatelessWidget {
   const _Header({
     required this.api,
     required this.auth,
+    required this.theme,
     required this.onSignOut,
   });
 
   final ApiClient api;
   final AuthService auth;
+  final ThemeController theme;
   final VoidCallback onSignOut;
 
   @override
@@ -224,9 +229,39 @@ class _Header extends StatelessWidget {
         PopupMenuButton<String>(
           tooltip: 'Opções',
           icon: const Icon(Icons.tune),
-          onSelected: (_) => onSignOut(),
-          itemBuilder: (_) => const [
-            PopupMenuItem(
+          onSelected: (value) {
+            if (value == 'logout') {
+              onSignOut();
+            } else {
+              theme.set(ThemeMode.values.asNameMap()[value]!);
+            }
+          },
+          itemBuilder: (_) => [
+            const PopupMenuItem(
+              enabled: false,
+              height: 32,
+              child: Text(
+                'APARÊNCIA',
+                style: TextStyle(fontSize: 12, color: EntreggoColors.slate),
+              ),
+            ),
+            CheckedPopupMenuItem(
+              value: 'system',
+              checked: theme.mode == ThemeMode.system,
+              child: const Text('Automático'),
+            ),
+            CheckedPopupMenuItem(
+              value: 'light',
+              checked: theme.mode == ThemeMode.light,
+              child: const Text('Claro'),
+            ),
+            CheckedPopupMenuItem(
+              value: 'dark',
+              checked: theme.mode == ThemeMode.dark,
+              child: const Text('Escuro'),
+            ),
+            const PopupMenuDivider(),
+            const PopupMenuItem(
               value: 'logout',
               child: ListTile(leading: Icon(Icons.logout), title: Text('Sair')),
             ),

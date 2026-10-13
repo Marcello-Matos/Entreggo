@@ -12,30 +12,44 @@ import 'theme.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  runApp(EntreggoApp(auth: FirebaseAuthService()));
+  final theme = ThemeController();
+  await theme.load();
+  runApp(EntreggoApp(auth: FirebaseAuthService(), theme: theme));
 }
 
 class EntreggoApp extends StatelessWidget {
-  const EntreggoApp({super.key, required this.auth, this.api});
+  const EntreggoApp({super.key, required this.auth, this.api, this.theme});
 
   final AuthService auth;
   final ApiClient? api;
+  final ThemeController? theme;
 
   @override
   Widget build(BuildContext context) {
     final client =
         api ??
         ApiClient(baseUrl: AppConfig.apiBaseUrl, tokenProvider: auth.getToken);
-    return MaterialApp(
-      title: 'Entreggo',
-      debugShowCheckedModeBanner: false,
-      theme: buildTheme(),
-      home: StreamBuilder<bool>(
-        stream: auth.signedInChanges,
-        initialData: auth.isSignedIn,
-        builder: (context, snap) => snap.data == true
-            ? HomeScreen(api: client, auth: auth, onSignOut: auth.signOut)
-            : LoginScreen(auth: auth),
+    final theme = this.theme ?? ThemeController();
+    return ListenableBuilder(
+      listenable: theme,
+      builder: (context, _) => MaterialApp(
+        title: 'Entreggo',
+        debugShowCheckedModeBanner: false,
+        theme: buildTheme(),
+        darkTheme: buildTheme(Brightness.dark),
+        themeMode: theme.mode,
+        home: StreamBuilder<bool>(
+          stream: auth.signedInChanges,
+          initialData: auth.isSignedIn,
+          builder: (context, snap) => snap.data == true
+              ? HomeScreen(
+                  api: client,
+                  auth: auth,
+                  theme: theme,
+                  onSignOut: auth.signOut,
+                )
+              : LoginScreen(auth: auth),
+        ),
       ),
     );
   }
