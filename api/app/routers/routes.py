@@ -7,7 +7,7 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.auth import get_current_user
 from app.config import Settings, get_settings
@@ -60,7 +60,10 @@ def create_route(
 @router.get("", response_model=list[RouteOut])
 def list_routes(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     return db.scalars(
-        select(Route).where(Route.user_id == user.id).order_by(Route.created_at.desc())
+        select(Route)
+        .where(Route.user_id == user.id)
+        .order_by(Route.created_at.desc())
+        .options(selectinload(Route.packages))
     ).all()
 
 
@@ -271,10 +274,11 @@ def optimize_route(
         )
 
     start = (route.start_lat, route.start_lng)
+    # O limite de busca cresce com o nº de paradas: para rotas comuns (até ~30)
+    # 1 segundo já encontra a melhor ordem, sem os 5 s fixos de antes.
+    time_limit_s = min(settings.optimizer_time_limit_s, max(1, len(usable) // 25))
     try:
-        result = optimize_order(
-            start, [(p.lat, p.lng) for p in usable], settings.optimizer_time_limit_s
-        )
+        result = optimize_order(start, [(p.lat, p.lng) for p in usable], time_limit_s)
     except NoSolutionError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
 

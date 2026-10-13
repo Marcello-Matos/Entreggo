@@ -19,7 +19,9 @@ def _database_url() -> str:
     return url
 
 
-engine = create_engine(_database_url(), pool_pre_ping=True)
+# pool_recycle recria conexões antes de o Neon suspendê-las por inatividade
+# (~5 min), sem custar um ping ao banco a cada requisição.
+engine = create_engine(_database_url(), pool_recycle=240)
 SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
 
 

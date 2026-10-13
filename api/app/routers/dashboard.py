@@ -3,7 +3,7 @@ from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.auth import get_current_user
 from app.db import get_db
@@ -29,6 +29,7 @@ def dashboard(
         select(Route)
         .where(Route.user_id == user.id, Route.created_at >= since)
         .order_by(Route.created_at.desc())
+        .options(selectinload(Route.packages), selectinload(Route.stops))
     ).all()
     counts = Counter(p.status for r in routes for p in r.packages)
     total = sum(counts.values())

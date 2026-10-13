@@ -1,20 +1,24 @@
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import delete
-from sqlalchemy.orm import Session
+from sqlalchemy import delete, select
+from sqlalchemy.orm import Session, joinedload
 
 from app.auth import get_current_user
 from app.db import get_db
 from app.deps import mark_route_changed
-from app.models import DeliveryEvent, Package, RouteStop, User
+from app.models import DeliveryEvent, Package, Route, RouteStop, User
 from app.schemas import PackageOut, PackageUpdate, StatusUpdate
 
 router = APIRouter(prefix="/v1/packages", tags=["packages"])
 
 
 def _get_owned_package(db: Session, package_id: uuid.UUID, user: User) -> Package:
-    pkg = db.get(Package, package_id)
+    pkg = db.scalar(
+        select(Package)
+        .where(Package.id == package_id)
+        .options(joinedload(Package.route).selectinload(Route.packages))
+    )
     if pkg is None or pkg.route.user_id != user.id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Pacote não encontrado")
     return pkg
@@ -68,6 +72,8 @@ def delete_package(
     route = pkg.route
     db.execute(delete(DeliveryEvent).where(DeliveryEvent.package_id == pkg.id))
     db.execute(delete(RouteStop).where(RouteStop.package_id == pkg.id))
-    db.delete(pkg)
+    # remove da coleção carregada: o cascade delete-orphan apaga a linha;
+    # db.delete() direto a ressuscitaria porque ela segue na coleção
+    route.packages.remove(pkg)
     mark_route_changed(route)
     db.commit()

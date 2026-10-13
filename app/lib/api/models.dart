@@ -139,7 +139,10 @@ class Package {
   );
 
   final String id;
-  final String status;
+
+  /// Mutável: a tela de entrega atualiza o status localmente após o PATCH,
+  /// sem recarregar a rota inteira do servidor.
+  String status;
   final String addressStatus;
   final String? trackingCode;
   final String? addressText;

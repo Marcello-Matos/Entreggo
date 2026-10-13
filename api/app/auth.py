@@ -1,3 +1,5 @@
+from datetime import UTC, datetime, timedelta
+
 import jwt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -13,6 +15,21 @@ FIREBASE_JWKS_URL = (
     "https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com"
 )
 _jwks_client = jwt.PyJWKClient(FIREBASE_JWKS_URL, cache_keys=True)
+
+# Cache em memória dos usuários já validados: evita uma ida ao banco por requisição.
+_user_cache: dict[str, tuple[datetime, User]] = {}
+_USER_CACHE_TTL = timedelta(minutes=5)
+
+
+def _cached_user(uid: str) -> User | None:
+    entry = _user_cache.get(uid)
+    if entry is None:
+        return None
+    expires, user = entry
+    if expires <= datetime.now(UTC):
+        del _user_cache[uid]
+        return None
+    return user
 
 
 def get_signing_key(token: str):
@@ -49,11 +66,14 @@ def get_current_user(
     except jwt.PyJWTError as exc:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Token inválido") from exc
 
-    user = db.get(User, claims["sub"])
+    user = _cached_user(claims["sub"])
     if user is None:
-        user = User(id=claims["sub"], email=claims.get("email"))
-        db.add(user)
-        db.commit()
+        user = db.get(User, claims["sub"])
+        if user is None:
+            user = User(id=claims["sub"], email=claims.get("email"))
+            db.add(user)
+            db.commit()
+        _user_cache[user.id] = (datetime.now(UTC) + _USER_CACHE_TTL, user)
     if user.status != "active":
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Conta inativa")
     return user

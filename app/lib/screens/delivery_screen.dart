@@ -18,11 +18,10 @@ class DeliveryScreen extends StatefulWidget {
 }
 
 class _DeliveryScreenState extends State<DeliveryScreen> {
-  late Future<RouteDetail> _detail = widget.api.getRoute(widget.routeId);
+  late final Future<RouteDetail> _detail = widget.api.getRoute(
+    widget.routeId,
+  );
   bool _busy = false;
-
-  void _reload() =>
-      setState(() => _detail = widget.api.getRoute(widget.routeId));
 
   void _toast(String message) =>
       ScaffoldMessenger.of(context)
@@ -36,8 +35,10 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
   Future<void> _mark(Package stop, String status) async {
     setState(() => _busy = true);
     try {
+      // O PATCH já confirma o novo status: atualiza o pacote em memória e
+      // evita baixar a rota inteira de novo a cada entrega.
       await widget.api.updateStatus(stop.id, status);
-      _reload();
+      if (mounted) setState(() => stop.status = status);
     } on ApiException catch (e) {
       _toast(e.message);
     } catch (e) {

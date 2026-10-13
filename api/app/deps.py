@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 
 from fastapi import HTTPException, status
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.models import Package, Route, Subscription, User
 
@@ -15,7 +15,11 @@ PLAN_LIMITS = {
 
 
 def get_owned_route(db: Session, route_id: uuid.UUID, user: User) -> Route:
-    route = db.get(Route, route_id)
+    route = db.scalar(
+        select(Route)
+        .where(Route.id == route_id)
+        .options(selectinload(Route.packages), selectinload(Route.stops))
+    )
     if route is None or route.user_id != user.id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Rota não encontrada")
     return route
