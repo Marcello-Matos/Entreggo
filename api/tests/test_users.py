@@ -40,11 +40,28 @@ def test_photo_validations(client, auth):
     assert resp.status_code == 415
     resp = client.put(
         url,
-        files={"file": ("big.png", b"\x00" * (2 * 1024 * 1024 + 1), "image/png")},
+        files={"file": ("big.png", b"\x00" * (5 * 1024 * 1024 + 1), "image/png")},
         headers=auth,
     )
     assert resp.status_code == 413
     assert client.get(url, headers=auth).status_code == 404
+
+
+def test_photo_detects_type_by_content(client, auth):
+    """iPhone envia HEIC e às vezes declara o tipo como octet-stream."""
+    url = "/v1/users/me/photo"
+    heic = b"\x00\x00\x00\x20ftypheic" + b"\x00" * 8
+    resp = client.put(url, files={"file": ("f.heic", heic, "image/heic")}, headers=auth)
+    assert resp.status_code == 204
+    assert client.get(url, headers=auth).headers["content-type"] == "image/heic"
+
+    resp = client.put(
+        url,
+        files={"file": ("f.png", PNG, "application/octet-stream")},
+        headers=auth,
+    )
+    assert resp.status_code == 204
+    assert client.get(url, headers=auth).headers["content-type"] == "image/png"
 
 
 def test_photo_requires_auth_and_is_private(client, auth, other_auth):

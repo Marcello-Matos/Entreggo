@@ -168,7 +168,7 @@ class ApiClient {
   Future<void> deletePackage(String packageId) =>
       _send('DELETE', '/v1/packages/$packageId');
 
-  /// Envia a foto de perfil (JPEG/PNG/WebP, até 2 MB).
+  /// Envia a foto de perfil (JPEG/PNG/HEIC/WebP/GIF/BMP, até 5 MB).
   Future<void> uploadPhoto(
     List<int> bytes, {
     String filename = 'foto.jpg',
