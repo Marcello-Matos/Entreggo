@@ -24,6 +24,12 @@ class FakeAuth implements AuthService {
   @override
   Future<String?> getToken() async => signedIn ? 'token' : null;
   @override
+  String? get photoUrl => null;
+  @override
+  String? get displayName => null;
+  @override
+  String? get email => null;
+  @override
   Future<void> signIn(String email, String password) async {
     lastEmail = email;
     signedIn = true;
@@ -57,6 +63,9 @@ ApiClient fakeApi(
   tokenProvider: () async => 'token',
   httpClient: MockClient((req) async {
     expect(req.headers['Authorization'], 'Bearer token');
+    if (req.url.path == '/v1/users/me/photo') {
+      return http.Response('', 404);
+    }
     final body = req.url.path == '/v1/dashboard'
         ? dashboard ??
               {

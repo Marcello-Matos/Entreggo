@@ -2,17 +2,25 @@ import 'package:flutter/material.dart';
 
 import '../api/api_client.dart';
 import '../api/models.dart';
+import '../auth/auth_service.dart';
 import '../theme.dart';
 import '../widgets/logo.dart';
+import '../widgets/profile_avatar.dart';
 import 'history_screen.dart';
 import 'map_screen.dart';
 import 'route_screen.dart';
 
 /// Tela inicial: desempenho do dia, escanear pacotes, rota atual e histórico.
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key, required this.api, required this.onSignOut});
+  const HomeScreen({
+    super.key,
+    required this.api,
+    required this.auth,
+    required this.onSignOut,
+  });
 
   final ApiClient api;
+  final AuthService auth;
   final VoidCallback onSignOut;
 
   @override
@@ -79,7 +87,11 @@ class _HomeScreenState extends State<HomeScreen> {
               return ListView(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
                 children: [
-                  _Header(onSignOut: widget.onSignOut),
+                  _Header(
+                    api: widget.api,
+                    auth: widget.auth,
+                    onSignOut: widget.onSignOut,
+                  ),
                   const SizedBox(height: 16),
                   Card(
                     child: Padding(
@@ -166,8 +178,14 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 class _Header extends StatelessWidget {
-  const _Header({required this.onSignOut});
+  const _Header({
+    required this.api,
+    required this.auth,
+    required this.onSignOut,
+  });
 
+  final ApiClient api;
+  final AuthService auth;
   final VoidCallback onSignOut;
 
   @override
@@ -202,6 +220,7 @@ class _Header extends StatelessWidget {
             ],
           ),
         ),
+        ProfileAvatar(api: api, auth: auth),
         PopupMenuButton<String>(
           tooltip: 'Opções',
           icon: const Icon(Icons.tune),

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 
@@ -166,4 +167,34 @@ class ApiClient {
 
   Future<void> deletePackage(String packageId) =>
       _send('DELETE', '/v1/packages/$packageId');
+
+  /// Envia a foto de perfil (JPEG/PNG/WebP, até 2 MB).
+  Future<void> uploadPhoto(
+    List<int> bytes, {
+    String filename = 'foto.jpg',
+  }) async {
+    final token = await tokenProvider();
+    final request =
+        http.MultipartRequest('PUT', Uri.parse('$baseUrl/v1/users/me/photo'))
+          ..headers['Authorization'] = 'Bearer ${token ?? ''}'
+          ..files.add(
+            http.MultipartFile.fromBytes('file', bytes, filename: filename),
+          );
+    await _decode(request);
+  }
+
+  /// Foto de perfil enviada pelo usuário; `null` se não houver.
+  Future<Uint8List?> fetchPhoto() async {
+    final token = await tokenProvider();
+    final request = http.Request('GET', Uri.parse('$baseUrl/v1/users/me/photo'))
+      ..headers['Authorization'] = 'Bearer ${token ?? ''}';
+    final response = await http.Response.fromStream(await _http.send(request));
+    if (response.statusCode == 404) return null;
+    if (response.statusCode >= 400) {
+      throw ApiException(response.statusCode, 'Erro ${response.statusCode}');
+    }
+    return response.bodyBytes;
+  }
+
+  Future<void> deletePhoto() => _send('DELETE', '/v1/users/me/photo');
 }

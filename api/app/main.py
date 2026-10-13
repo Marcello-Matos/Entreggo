@@ -4,7 +4,7 @@ from fastapi import FastAPI
 
 from app import models  # noqa: F401  (registra os modelos no metadata)
 from app.db import Base, engine
-from app.routers import dashboard, import_jobs, packages, routes, subscription
+from app.routers import dashboard, import_jobs, packages, routes, subscription, users
 
 
 @asynccontextmanager
@@ -22,6 +22,7 @@ for r in (
     import_jobs.router,
     subscription.router,
     dashboard.router,
+    users.router,
 ):
     app.include_router(r)
 

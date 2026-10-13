@@ -34,7 +34,7 @@ class EntreggoApp extends StatelessWidget {
         stream: auth.signedInChanges,
         initialData: auth.isSignedIn,
         builder: (context, snap) => snap.data == true
-            ? HomeScreen(api: client, onSignOut: auth.signOut)
+            ? HomeScreen(api: client, auth: auth, onSignOut: auth.signOut)
             : LoginScreen(auth: auth),
       ),
     );

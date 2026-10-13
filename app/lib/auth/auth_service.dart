@@ -9,6 +9,11 @@ abstract class AuthService {
   Stream<bool> get signedInChanges;
   bool get isSignedIn;
   Future<String?> getToken();
+
+  /// Foto do provedor de login (ex.: Google); nula para e-mail/senha.
+  String? get photoUrl => null;
+  String? get displayName => null;
+  String? get email => null;
   Future<void> signIn(String email, String password);
 
   /// Retorna `false` se o usuário cancelar a escolha da conta Google.
@@ -27,6 +32,13 @@ class FirebaseAuthService implements AuthService {
 
   @override
   bool get isSignedIn => _auth.currentUser != null;
+
+  @override
+  String? get photoUrl => _auth.currentUser?.photoURL;
+  @override
+  String? get displayName => _auth.currentUser?.displayName;
+  @override
+  String? get email => _auth.currentUser?.email;
 
   /// O SDK renova o ID token automaticamente quando está perto de expirar.
   @override
