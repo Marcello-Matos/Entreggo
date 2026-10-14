@@ -282,6 +282,15 @@ class _RouteScreenState extends State<RouteScreen> {
     });
   }
 
+  void _openLoadingPlan(RouteDetail detail) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => LoadingPlanScreen(api: widget.api, detail: detail),
+      ),
+    ).then((_) => _reload());
+  }
+
   Future<void> _packageMenu(Package pkg) async {
     final choice = await showModalBottomSheet<String>(
       context: context,
@@ -372,15 +381,7 @@ class _RouteScreenState extends State<RouteScreen> {
                     case 'manual':
                       _addManual();
                     case 'loadplan' when detail != null:
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => LoadingPlanScreen(
-                            api: widget.api,
-                            detail: detail,
-                          ),
-                        ),
-                      ).then((_) => _reload());
+                      _openLoadingPlan(detail);
                     case 'rename' when detail != null:
                       _renameRoute(detail.route.title);
                     case 'delete' when detail != null:
@@ -494,6 +495,25 @@ class _RouteScreenState extends State<RouteScreen> {
                   onPressed: _busy ? null : _reviewPending,
                   child: const Text('Revisar'),
                 ),
+              ),
+            ),
+          if (detail.isOptimized)
+            Card(
+              color: EntreggoColors.accent.withValues(alpha: 0.08),
+              child: ListTile(
+                leading: const Icon(
+                  Icons.local_shipping_outlined,
+                  color: EntreggoColors.accent,
+                ),
+                title: const Text(
+                  'Plano de carga do veículo',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
+                subtitle: const Text(
+                  'Onde colocar cada pacote para achar fácil na parada',
+                ),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => _openLoadingPlan(detail),
               ),
             ),
           if (packages.isEmpty)
