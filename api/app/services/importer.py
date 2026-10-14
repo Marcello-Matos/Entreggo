@@ -48,6 +48,76 @@ _CITY_UF_TAIL = re.compile(rf"[-,]\s*({_CITY})\s*(?:/|\s-\s|,)\s*({_UFS})\s*$", 
 # linha de tabela sem separadores: "..., 136 Osasco SP"
 _CITY_UF_BARE_TAIL = re.compile(rf"(\d+[A-Za-z]?|s/?n)\s+({_CITY})\s+({_UFS})\s*$", re.IGNORECASE)
 _CITY_UF_LINE = re.compile(rf"^({_CITY})\s*[-/,]\s*({_UFS})$", re.IGNORECASE)
+# tabela "Rua X 136 Bairro - Cidade": número e bairro/cidade após o logradouro,
+# sem separador e sem UF. O último número da linha é o da casa/prédio.
+_NUM_PLACE_TAIL = re.compile(r"\b(\d{1,6}[A-Za-z]?|s/?n)\s+([^\d]{2,})$", re.IGNORECASE)
+# célula de tabela: só número ("136", "s/n") ou só nome de lugar ("Osasco")
+_BARE_NUMBER = re.compile(r"^(?:s/?n|\d{1,6}[A-Za-z]?)$", re.IGNORECASE)
+# número de linha da tabela ("1", "23"), usado como separador de registro
+_ROW_INDEX = re.compile(r"^\s*(?:n[ºo°]\s*)?\d{1,4}\s*$", re.IGNORECASE)
+_BARE_PLACE = re.compile(rf"^({_CITY})(?:\s*[-–—]\s*({_CITY}))?$", re.IGNORECASE)
+# palavras de cabeçalho de tabela ("Nº", "Rua / Avenida", "Número", "CEP"...)
+_HEADER_WORDS = {
+    "n",
+    "no",
+    "numero",
+    "item",
+    "ordem",
+    "seq",
+    "sequencia",
+    "rua",
+    "avenida",
+    "av",
+    "logradouro",
+    "endereco",
+    "bairro",
+    "cidade",
+    "municipio",
+    "cep",
+    "uf",
+    "estado",
+    "nome",
+    "cliente",
+    "destinatario",
+    "recebedor",
+    "codigo",
+    "rastreio",
+    "tracking",
+    "obs",
+    "observacao",
+    "observacoes",
+    "nota",
+    "notas",
+    "status",
+    "data",
+    "pacote",
+    "quantidade",
+    "qtd",
+    "assinatura",
+    "complemento",
+    "referencia",
+    "telefone",
+    "doc",
+    "documento",
+    "num",
+}
+
+
+def _is_header_line(text: str) -> bool:
+    tokens = [t for t in normalize_header(text).split("_") if t]
+    return bool(tokens) and all(t in _HEADER_WORDS for t in tokens)
+
+
+def _attach_place(rec: dict[str, str | None], place: str) -> None:
+    """'Planalto Paulista - São Paulo' -> cidade 'São Paulo' e bairro no endereço."""
+    parts = [p.strip(" .,") for p in re.split(r"\s*[-–—/]\s*", place) if p.strip(" .,")]
+    if not parts:
+        return
+    rec["city"] = parts[-1]
+    if len(parts) > 1:
+        rec["address"] = f"{rec['address']} - {' - '.join(parts[:-1])}"
+
+
 _LIST_NUMBER = re.compile(r"^\s*(?:n[ºo°]\s*)?\d{1,4}\s*(?:[.)\-:]\s*|\s+)(?=\D)")
 _ADDRESS_LABEL = re.compile(
     r"^(?:endere[cç]o(?:\s+de\s+entrega)?|end\.|destino|logradouro|entregar\s+em)\s*[:\-]\s*",
@@ -133,8 +203,12 @@ def split_address_line(line: str) -> dict[str, str | None] | None:
     elif bare := _CITY_UF_BARE_TAIL.search(text):
         rec["city"], rec["state"] = bare.group(2).strip(" ."), bare.group(3).upper()
         text = text[: bare.end(1)]
+    elif num_place := _NUM_PLACE_TAIL.search(text):
+        # linha de tabela: "Rua X 136 Bairro - Cidade" sem separadores nem UF
+        rec["address"] = f"{text[: num_place.start()].strip(' ,-')}, {num_place.group(1)}"
+        _attach_place(rec, num_place.group(2))
     text = text.strip(" ,-")
-    rec["address"] = text.title() if text.isupper() else text
+    rec["address"] = rec.get("address") or (text.title() if text.isupper() else text)
     if rec.get("city") and rec["city"].isupper():
         rec["city"] = rec["city"].title()
     return rec
@@ -152,10 +226,19 @@ def parse_pdf_lines(lines: list[str]) -> list[dict[str, str | None]]:
     streets = list(records)
 
     for j, near in enumerate(lines):
-        if j in records:
+        if j in records or _is_header_line(near):
             continue
-        # empate de distância fica com o logradouro de cima (CEP/cidade vêm depois dele)
-        owner = min(streets, key=lambda s: (abs(s - j), s > j), default=None)
+        # dono = logradouro mais próximo (empate fica com o de cima); o de
+        # baixo é descartado se um número de linha da tabela separa os dois
+        above = max((s for s in streets if s < j), default=None)
+        below = min((s for s in streets if s > j), default=None)
+        if below is not None and any(_ROW_INDEX.match(lines[k]) for k in range(j + 1, below)):
+            below = None
+        owner = min(
+            (s for s in (above, below) if s is not None),
+            key=lambda s: (abs(s - j), s > j),
+            default=None,
+        )
         if owner is None or abs(owner - j) > 4:
             continue
         rec = records[owner]
@@ -171,12 +254,25 @@ def parse_pdf_lines(lines: list[str]) -> list[dict[str, str | None]]:
         if city and rec.get("city") is None:
             rec["city"], rec["state"] = city.group(1).strip(" ."), city.group(2).upper()
             continue
-        if _BARE_CODE.match(near):
-            rec.setdefault("tracking_code", near)
-            continue
         note = _NOTE.match(near)
         if note:
             rec.setdefault("delivery_notes", note.group(1).strip())
+            continue
+        # tabela célula a célula: "136" e "Osasco" vêm em linhas depois do logradouro
+        if (
+            owner < j
+            and _BARE_NUMBER.match(near)
+            and not re.search(r"\d", rec.get("address") or "")
+        ):
+            rec["address"] = f"{rec['address']}, {near.upper()}"
+            continue
+        if owner < j and rec.get("city") is None:
+            if _BARE_PLACE.match(near):
+                _attach_place(rec, near.strip())
+                continue
+        if _BARE_CODE.match(near):
+            rec.setdefault("tracking_code", near)
+            continue
     return list(records.values())
 
 

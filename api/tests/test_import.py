@@ -218,6 +218,59 @@ def test_pdf_address_formats(lines):
     assert normalize_postal_code(row["postal_code"]) == "06290-180"
 
 
+def test_pdf_table_row_number_and_city_without_uf():
+    """Tabela "Rua / Número / Bairro-Cidade / CEP": número e cidade embutidos
+    na mesma linha extraída, sem UF nem separadores."""
+    from app.services.importer import parse_pdf_lines
+
+    rows = parse_pdf_lines(
+        [
+            "15 ENDEREÇOS REAIS",
+            "Nº Rua / Avenida Número Bairro / Cidade CEP",
+            "1 Rua Anastacia Jachimov 136 Osasco 06290-180",
+            "2 Rua Manuel Cherem 300 Planalto Paulista — São Paulo 04360-030",
+        ]
+    )
+    assert len(rows) == 2
+    assert rows[0]["address"] == "Rua Anastacia Jachimov, 136"
+    assert rows[0]["city"] == "Osasco"
+    assert rows[0]["postal_code"] == "06290-180"
+    assert rows[1]["address"] == "Rua Manuel Cherem, 300 - Planalto Paulista"
+    assert rows[1]["city"] == "São Paulo"
+    assert rows[1]["postal_code"] == "04360-030"
+
+
+def test_pdf_table_cells_on_separate_lines():
+    """Mesma tabela com cada célula numa linha: número e cidade se ligam
+    ao logradouro acima, e o CEP não escorrega para a linha seguinte."""
+    from app.services.importer import parse_pdf_lines
+
+    rows = parse_pdf_lines(
+        [
+            "Nº",
+            "Rua / Avenida",
+            "Número",
+            "Bairro / Cidade",
+            "CEP",
+            "1",
+            "Rua Anastacia Jachimov",
+            "136",
+            "Osasco",
+            "06290-180",
+            "2",
+            "Rua Manuel Cherem",
+            "300",
+            "Planalto Paulista — São Paulo",
+            "04360-030",
+        ]
+    )
+    assert len(rows) == 2
+    assert rows[0]["address"] == "Rua Anastacia Jachimov, 136"
+    assert (rows[0]["city"], rows[0]["postal_code"]) == ("Osasco", "06290-180")
+    assert rows[1]["address"] == "Rua Manuel Cherem, 300 - Planalto Paulista"
+    assert (rows[1]["city"], rows[1]["postal_code"]) == ("São Paulo", "04360-030")
+
+
 def test_csv_full_address_in_one_cell():
     content = b"codigo;endereco\nA1;AV. PAULISTA, 1578, SAO PAULO, SP, 01310200\n"
     (row,) = parse_import("a.csv", content).rows
