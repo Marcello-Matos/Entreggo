@@ -348,24 +348,31 @@ class _RingTile extends StatelessWidget {
       child: Row(
         children: [
           SizedBox(
-            width: 52,
-            height: 52,
+            width: 56,
+            height: 56,
             child: Stack(
               alignment: Alignment.center,
               children: [
-                CircularProgressIndicator(
-                  value: progress,
-                  strokeWidth: 6,
-                  backgroundColor: const Color(0xFFDCCFFA),
-                  color: const Color(0xFF7C3AED),
-                  strokeCap: StrokeCap.round,
+                SizedBox.expand(
+                  child: CircularProgressIndicator(
+                    value: progress,
+                    strokeWidth: 5.5,
+                    backgroundColor: const Color(0xFFDCCFFA),
+                    color: const Color(0xFF7C3AED),
+                    strokeCap: StrokeCap.round,
+                  ),
                 ),
-                Text(
-                  '$percent%',
-                  style: const TextStyle(
-                    color: Color(0xFF7C3AED),
-                    fontSize: 13,
-                    fontWeight: FontWeight.w800,
+                // FittedBox reduz a fonte quando cabem 3 dígitos ("100%")
+                Padding(
+                  padding: const EdgeInsets.all(10),
+                  child: FittedBox(
+                    child: Text(
+                      '$percent%',
+                      style: const TextStyle(
+                        color: Color(0xFF7C3AED),
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
                   ),
                 ),
               ],
