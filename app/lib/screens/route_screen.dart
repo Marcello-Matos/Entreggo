@@ -9,6 +9,7 @@ import '../theme.dart';
 import '../widgets/address_form.dart';
 import '../widgets/location_picker.dart';
 import '../widgets/status.dart';
+import 'loading_plan_screen.dart';
 import 'map_screen.dart';
 import 'scanner_screen.dart';
 
@@ -370,6 +371,16 @@ class _RouteScreenState extends State<RouteScreen> {
                       _importSpreadsheet();
                     case 'manual':
                       _addManual();
+                    case 'loadplan' when detail != null:
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => LoadingPlanScreen(
+                            api: widget.api,
+                            detail: detail,
+                          ),
+                        ),
+                      ).then((_) => _reload());
                     case 'rename' when detail != null:
                       _renameRoute(detail.route.title);
                     case 'delete' when detail != null:
@@ -391,6 +402,14 @@ class _RouteScreenState extends State<RouteScreen> {
                       title: Text('Adicionar manualmente'),
                     ),
                   ),
+                  if (detail?.isOptimized ?? false)
+                    const PopupMenuItem(
+                      value: 'loadplan',
+                      child: ListTile(
+                        leading: Icon(Icons.local_shipping_outlined),
+                        title: Text('Plano de carga'),
+                      ),
+                    ),
                   const PopupMenuItem(
                     value: 'rename',
                     child: ListTile(

@@ -120,6 +120,15 @@ class LocationUpdate(BaseModel):
     location: str | None = Field(default=None, max_length=60)
 
 
+class LocationAssignment(BaseModel):
+    package_id: uuid.UUID
+    location: str | None = Field(default=None, max_length=60)
+
+
+class BulkLocationUpdate(BaseModel):
+    assignments: list[LocationAssignment] = Field(max_length=300)
+
+
 class StatusUpdate(BaseModel):
     status: PackageStatus
     note: str | None = Field(default=None, max_length=500)

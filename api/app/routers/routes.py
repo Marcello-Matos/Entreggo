@@ -23,6 +23,7 @@ from app.models import (
     utcnow,
 )
 from app.schemas import (
+    BulkLocationUpdate,
     GeocodeResult,
     OptimizeIn,
     OptimizeOut,
@@ -316,6 +317,30 @@ def optimize_route(
         objective="distance",
         disclaimer=DISCLAIMER,
     )
+
+
+@router.post("/{route_id}/locations", response_model=list[PackageOut])
+def bulk_update_locations(
+    route_id: uuid.UUID,
+    body: BulkLocationUpdate,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Plano de carga: grava o local no veículo de vários pacotes de uma vez."""
+    route = get_owned_route(db, route_id, user)
+    by_id = {p.id: p for p in route.packages}
+    updated = []
+    for a in body.assignments:
+        pkg = by_id.get(a.package_id)
+        if pkg is None:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_CONTENT,
+                "Pacote não pertence a esta rota",
+            )
+        pkg.vehicle_location = (a.location or "").strip() or None
+        updated.append(pkg)
+    db.commit()
+    return updated
 
 
 @router.get("/{route_id}/summary", response_model=RouteSummary)

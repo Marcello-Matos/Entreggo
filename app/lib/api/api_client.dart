@@ -182,6 +182,20 @@ class ApiClient {
     },
   );
 
+  /// Plano de carga: grava o local no veículo de vários pacotes de uma vez.
+  /// `assignments`: {package_id: local}.
+  Future<void> setLocations(String routeId, Map<String, String> assignments) =>
+      _send(
+        'POST',
+        '/v1/routes/$routeId/locations',
+        body: {
+          'assignments': [
+            for (final e in assignments.entries)
+              {'package_id': e.key, 'location': e.value},
+          ],
+        },
+      );
+
   /// Posição do pacote no veículo (`null` remove o local).
   Future<void> updateLocation(String packageId, String? location) => _send(
     'PATCH',

@@ -146,6 +146,32 @@ def test_vehicle_location(client, auth, other_auth, route_id):
     assert client.patch(url, json={"location": "x" * 61}, headers=auth).status_code == 422
 
 
+def test_bulk_vehicle_locations(client, auth, other_auth, route_id):
+    ids = []
+    for code in ("B1", "B2"):
+        pkg = client.post(f"/v1/routes/{route_id}/scan", json={"code": code}, headers=auth)
+        ids.append(pkg.json()["id"])
+    url = f"/v1/routes/{route_id}/locations"
+    body = {
+        "assignments": [
+            {"package_id": ids[0], "location": "Fundo esquerdo"},
+            {"package_id": ids[1], "location": "Porta direita"},
+        ]
+    }
+    assert client.post(url, json=body, headers=other_auth).status_code == 404
+
+    resp = client.post(url, json=body, headers=auth)
+    assert resp.status_code == 200
+    locs = {p["tracking_code"]: p["vehicle_location"] for p in resp.json()}
+    assert locs == {"B1": "Fundo esquerdo", "B2": "Porta direita"}
+
+    # pacote de outra rota é rejeitado
+    other = client.post("/v1/routes", json={"title": "x"}, headers=auth).json()
+    pkg2 = client.post(f"/v1/routes/{other['id']}/scan", json={"code": "X"}, headers=auth).json()
+    bad = {"assignments": [{"package_id": pkg2["id"], "location": "y"}]}
+    assert client.post(url, json=bad, headers=auth).status_code == 422
+
+
 def test_delete_package(client, auth, other_auth, route_id):
     pkg = client.post(f"/v1/routes/{route_id}/scan", json={"code": "D1"}, headers=auth).json()
     url = f"/v1/packages/{pkg['id']}"
