@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 
 import '../api/api_client.dart';
 import '../api/models.dart';
 import '../auth/auth_service.dart';
+import '../routing/location.dart';
 import '../theme.dart';
 import '../widgets/logo.dart';
 import '../widgets/profile_avatar.dart';
-import '../widgets/status.dart';
 import 'history_screen.dart';
 import 'map_screen.dart';
 import 'route_screen.dart';
@@ -87,6 +88,7 @@ class _HomeScreenState extends State<HomeScreen> {
             builder: (context, snap) {
               final dash = snap.data;
               final loading = snap.connectionState != ConnectionState.done;
+              final hasActive = dash?.activeRouteId != null;
               return ListView(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
                 children: [
@@ -103,63 +105,102 @@ class _HomeScreenState extends State<HomeScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          Text(
-                            'RESUMO DE HOJE',
-                            style: Theme.of(context).textTheme.labelLarge
-                                ?.copyWith(
-                                  color: EntreggoColors.slate,
-                                  letterSpacing: 0.6,
-                                ),
+                          Row(
+                            children: [
+                              const Icon(
+                                Icons.bar_chart_rounded,
+                                size: 20,
+                                color: EntreggoColors.primary,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Resumo de hoje',
+                                style: Theme.of(context).textTheme.titleMedium
+                                    ?.copyWith(fontWeight: FontWeight.w700),
+                              ),
+                            ],
                           ),
                           const SizedBox(height: 14),
                           if (snap.hasError)
                             _ErrorBox(error: snap.error!, onRetry: _reload)
                           else
                             _Summary(dash: dash ?? const Dashboard()),
-                          if (dash?.activeRouteId != null) ...[
-                            const SizedBox(height: 16),
-                            _ActiveRouteCard(
-                              dash: dash!,
-                              onTap: () => _openActive(dash),
-                            ),
-                          ],
-                          const SizedBox(height: 18),
-                          FilledButton.icon(
-                            style: FilledButton.styleFrom(
-                              minimumSize: const Size.fromHeight(58),
-                              textStyle: const TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            onPressed: _busy || loading
-                                ? null
-                                : () => _scan(dash),
-                            icon: const Icon(Icons.qr_code_scanner),
-                            label: const Text('Escanear pacotes'),
-                          ),
-                          const SizedBox(height: 14),
-                          DecoratedBox(
-                            decoration: BoxDecoration(
-                              border: Border.all(
-                                color: const Color(0xFFE2E8F0),
-                              ),
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            child: Column(
-                              children: [
-                                _MenuTile(
-                                  icon: Icons.history,
-                                  title: 'Histórico de entregas',
-                                  subtitle: 'Consulte suas rotas anteriores',
-                                  onTap: () =>
-                                      _push(HistoryScreen(api: widget.api)),
-                                ),
-                              ],
-                            ),
-                          ),
                         ],
                       ),
+                    ),
+                  ),
+                  if (hasActive) ...[
+                    const SizedBox(height: 12),
+                    _NextStopCard(dash: dash!, onTap: () => _openActive(dash)),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        _StatChip(
+                          icon: Icons.route_outlined,
+                          label:
+                              '${dash.activeRemaining} '
+                              '${dash.activeRemaining == 1 ? 'parada restante' : 'paradas restantes'}',
+                        ),
+                        const SizedBox(width: 12),
+                        if (dash.remainingLabel.isNotEmpty)
+                          _StatChip(
+                            icon: Icons.schedule,
+                            label: '${dash.remainingLabel} restante',
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    FilledButton.icon(
+                      style: FilledButton.styleFrom(
+                        minimumSize: const Size.fromHeight(58),
+                        textStyle: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      onPressed: () => _openActive(dash),
+                      icon: const Icon(Icons.map_outlined),
+                      label: Text(
+                        dash.activeOptimized
+                            ? 'Ver mapa e continuar'
+                            : 'Continuar montando a rota',
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size.fromHeight(50),
+                      ),
+                      onPressed: _busy || loading ? null : () => _scan(dash),
+                      icon: const Icon(Icons.qr_code_scanner),
+                      label: const Text('Escanear mais pacotes'),
+                    ),
+                  ] else ...[
+                    const SizedBox(height: 18),
+                    FilledButton.icon(
+                      style: FilledButton.styleFrom(
+                        minimumSize: const Size.fromHeight(58),
+                        textStyle: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      onPressed: _busy || loading ? null : () => _scan(dash),
+                      icon: const Icon(Icons.qr_code_scanner),
+                      label: const Text('Escanear pacotes'),
+                    ),
+                  ],
+                  const SizedBox(height: 14),
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: _MenuTile(
+                      icon: Icons.history,
+                      title: 'Histórico de entregas',
+                      subtitle: 'Consulte suas rotas anteriores',
+                      onTap: () => _push(HistoryScreen(api: widget.api)),
                     ),
                   ),
                 ],
@@ -205,7 +246,7 @@ class _Header extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Entreggo',
+                'Entregas',
                 style: Theme.of(context).textTheme.titleLarge
                     ?.copyWith(fontWeight: FontWeight.w800),
               ),
@@ -391,88 +432,137 @@ class _RingTile extends StatelessWidget {
   );
 }
 
-/// Rota em andamento: próxima parada, paradas e tempo restante estimado.
-class _ActiveRouteCard extends StatelessWidget {
-  const _ActiveRouteCard({required this.dash, required this.onTap});
+/// Card "Próxima parada": endereço + distância em linha reta e tempo
+/// estimado de deslocamento (~30 km/h), como no mockup.
+class _NextStopCard extends StatefulWidget {
+  const _NextStopCard({required this.dash, required this.onTap});
 
   final Dashboard dash;
   final VoidCallback onTap;
 
   @override
+  State<_NextStopCard> createState() => _NextStopCardState();
+}
+
+class _NextStopCardState extends State<_NextStopCard> {
+  double? _distanceM;
+
+  @override
+  void initState() {
+    super.initState();
+    final lat = widget.dash.nextLat;
+    final lng = widget.dash.nextLng;
+    if (lat == null || lng == null) return;
+    currentPosition().then((pos) {
+      if (pos != null && mounted) {
+        setState(() {
+          _distanceM = Geolocator.distanceBetween(
+            pos.latitude,
+            pos.longitude,
+            lat,
+            lng,
+          );
+        });
+      }
+    });
+  }
+
+  String get _distanceLabel {
+    final m = _distanceM;
+    if (m == null) return '';
+    if (m < 1000) return '${m.round()} m';
+    return '${(m / 1000).toStringAsFixed(1).replaceAll('.', ',')} km';
+  }
+
+  String get _etaLabel {
+    final m = _distanceM;
+    if (m == null) return '';
+    // ~30 km/h média urbana — estimativa de deslocamento
+    final min = (m / 500).round().clamp(1, 999);
+    return '~$min min';
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final remaining = dash.activeRemaining;
+    final dash = widget.dash;
+    final distance = [
+      if (_distanceLabel.isNotEmpty) _distanceLabel,
+      if (_etaLabel.isNotEmpty) _etaLabel,
+    ].join(' • ');
     return Material(
-      color: EntreggoColors.primary.withValues(alpha: 0.06),
+      color: const Color(0xFFE9F9EE),
       borderRadius: BorderRadius.circular(16),
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
-        onTap: onTap,
+        onTap: widget.onTap,
         child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(
             children: [
-              Row(
-                children: [
-                  const Icon(
-                    Icons.route_outlined,
-                    size: 20,
-                    color: EntreggoColors.primary,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      dash.activeRouteTitle ?? 'Rota em andamento',
-                      style: const TextStyle(fontWeight: FontWeight.w700),
-                    ),
-                  ),
-                  StatusChip(
-                    label: 'Em progresso',
-                    color: Colors.green.shade700,
-                  ),
-                ],
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF15803D).withValues(alpha: 0.15),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.location_on_outlined,
+                  color: Color(0xFF15803D),
+                ),
               ),
-              const SizedBox(height: 10),
-              Text(
-                [
-                  '$remaining ${remaining == 1 ? 'parada restante' : 'paradas restantes'}',
-                  if (dash.remainingLabel.isNotEmpty)
-                    '${dash.remainingLabel} restantes',
-                ].join('  •  '),
-                style: Theme.of(context).textTheme.titleSmall
-                    ?.copyWith(fontWeight: FontWeight.w800),
-              ),
-              if (dash.nextAddress != null) ...[
-                const SizedBox(height: 8),
-                Row(
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Icon(
-                      Icons.location_on_outlined,
-                      size: 18,
-                      color: EntreggoColors.accent,
-                    ),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        'Próxima: ${dash.nextAddress}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                    const Text(
+                      'Próxima parada',
+                      style: TextStyle(
+                        color: Color(0xFF15803D),
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
                       ),
                     ),
-                    const Icon(
-                      Icons.chevron_right,
-                      size: 18,
-                      color: EntreggoColors.slate,
+                    Text(
+                      dash.nextAddress ?? dash.activeRouteTitle ?? 'Parada',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontWeight: FontWeight.w600),
                     ),
+                    if (distance.isNotEmpty)
+                      Text(
+                        distance,
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
                   ],
                 ),
-              ],
+              ),
+              const Icon(Icons.chevron_right, color: Color(0xFF15803D)),
             ],
           ),
         ),
       ),
     );
   }
+}
+
+/// Chip de estatística com ícone ("11 paradas restantes", "1h42 restante").
+class _StatChip extends StatelessWidget {
+  const _StatChip({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Icon(icon, size: 18, color: EntreggoColors.slate),
+      const SizedBox(width: 6),
+      Text(label, style: Theme.of(context).textTheme.bodyMedium),
+    ],
+  );
 }
 
 class _Tile extends StatelessWidget {

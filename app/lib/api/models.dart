@@ -55,6 +55,8 @@ class Dashboard {
     this.activeRemaining = 0,
     this.activeOptimized = false,
     this.nextAddress,
+    this.nextLat,
+    this.nextLng,
     this.remainingSeconds,
   });
 
@@ -72,6 +74,8 @@ class Dashboard {
       activeRemaining: active?['remaining'] as int? ?? 0,
       activeOptimized: active?['optimized'] as bool? ?? false,
       nextAddress: active?['next_address'] as String?,
+      nextLat: (active?['next_lat'] as num?)?.toDouble(),
+      nextLng: (active?['next_lng'] as num?)?.toDouble(),
       remainingSeconds: active?['remaining_seconds'] as int?,
     );
   }
@@ -89,6 +93,8 @@ class Dashboard {
 
   /// Próxima parada da rota ativa e tempo estimado para concluir o restante.
   final String? nextAddress;
+  final double? nextLat;
+  final double? nextLng;
   final int? remainingSeconds;
 
   String get remainingLabel {

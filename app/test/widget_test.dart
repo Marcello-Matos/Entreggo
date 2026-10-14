@@ -135,13 +135,17 @@ void main() {
     await tester.tap(find.text('Entrar'));
     await tester.pumpAndSettle();
 
-    expect(find.text('RESUMO DE HOJE'), findsOneWidget);
+    expect(find.text('Resumo de hoje'), findsOneWidget);
     expect(find.text('48'), findsOneWidget);
     expect(find.text('32'), findsOneWidget);
     expect(find.text('67%'), findsOneWidget);
     expect(find.text('16 paradas restantes'), findsOneWidget);
 
-    await tester.ensureVisible(find.text('Histórico de entregas'));
+    await tester.scrollUntilVisible(
+      find.text('Histórico de entregas'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
     await tester.pumpAndSettle();
     await tester.tap(find.text('Histórico de entregas'));
     await tester.pumpAndSettle();

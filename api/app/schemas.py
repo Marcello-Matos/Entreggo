@@ -97,6 +97,8 @@ class ActiveRoute(BaseModel):
     optimized: bool
     next_address: str | None = None
     next_eta: datetime | None = None
+    next_lat: float | None = None
+    next_lng: float | None = None
     remaining_seconds: int | None = None
 
 
