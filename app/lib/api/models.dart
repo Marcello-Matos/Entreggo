@@ -95,7 +95,9 @@ class Dashboard {
     final s = remainingSeconds;
     if (s == null) return '';
     final m = (s / 60).round();
-    return m < 60 ? '$m min' : '${m ~/ 60}h${(m % 60).toString().padLeft(2, '0')}';
+    return m < 60
+        ? '$m min'
+        : '${m ~/ 60}h${(m % 60).toString().padLeft(2, '0')}';
   }
 }
 
@@ -220,8 +222,9 @@ class RouteDetail {
     },
     etas: {
       for (final s in j['stops'] as List)
-        (s as Map<String, dynamic>)['package_id'] as String:
-            DateTime.tryParse(s['eta_estimate'] as String? ?? '')?.toLocal(),
+        (s as Map<String, dynamic>)['package_id'] as String: DateTime.tryParse(
+          s['eta_estimate'] as String? ?? '',
+        )?.toLocal(),
     },
     optimization: j['optimization'] as Map<String, dynamic>?,
   );

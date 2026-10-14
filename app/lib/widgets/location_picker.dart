@@ -68,7 +68,10 @@ class _LocationPickerState extends State<_LocationPicker> {
             const SizedBox(height: 16),
             _Group(
               options: _positions,
-              icons: const [Icons.airline_seat_flat, Icons.airline_seat_flat_angled],
+              icons: const [
+                Icons.airline_seat_flat,
+                Icons.airline_seat_flat_angled,
+              ],
               selected: _position,
               onSelect: (v) => setState(() => _position = v),
             ),

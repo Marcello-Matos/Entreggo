@@ -16,10 +16,7 @@ async def lifespan(_: FastAPI):
         # Colunas adicionadas depois do primeiro deploy (create_all não altera tabelas)
         with engine.begin() as conn:
             conn.execute(
-                text(
-                    "ALTER TABLE packages "
-                    "ADD COLUMN IF NOT EXISTS vehicle_location VARCHAR(60)"
-                )
+                text("ALTER TABLE packages ADD COLUMN IF NOT EXISTS vehicle_location VARCHAR(60)")
             )
             conn.execute(
                 text(

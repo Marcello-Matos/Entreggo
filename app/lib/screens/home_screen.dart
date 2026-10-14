@@ -432,9 +432,8 @@ class _ActiveRouteCard extends StatelessWidget {
                   if (dash.remainingLabel.isNotEmpty)
                     '${dash.remainingLabel} restantes',
                 ].join('  •  '),
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w800,
-                ),
+                style: Theme.of(context).textTheme.titleSmall
+                    ?.copyWith(fontWeight: FontWeight.w800),
               ),
               if (dash.nextAddress != null) ...[
                 const SizedBox(height: 8),

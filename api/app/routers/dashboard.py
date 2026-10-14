@@ -51,9 +51,7 @@ def dashboard(
             next_eta = pending_stops[0].eta_estimate
             etas = [s.eta_estimate for s in active.stops if s.eta_estimate]
             if etas and next_eta:
-                remaining_seconds = max(
-                    0, round((max(etas) - next_eta).total_seconds())
-                )
+                remaining_seconds = max(0, round((max(etas) - next_eta).total_seconds()))
     return DashboardOut(
         packages=total,
         delivered=counts["delivered"],

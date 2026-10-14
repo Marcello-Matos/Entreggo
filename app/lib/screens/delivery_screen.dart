@@ -86,9 +86,7 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
   /// Feedback animado rápido ao concluir a entrega (check + próxima parada).
   Future<void> _showDelivered() async {
     final overlay = Overlay.of(context);
-    final entry = OverlayEntry(
-      builder: (_) => const _DeliveredOverlay(),
-    );
+    final entry = OverlayEntry(builder: (_) => const _DeliveredOverlay());
     overlay.insert(entry);
     await Future<void>.delayed(const Duration(milliseconds: 1400));
     entry.remove();
@@ -194,9 +192,8 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
                       '${stops.length - done} restantes',
                       '≈ ${_duration(detail.remainingSeconds!)}',
                     ].join(' • '),
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
+                    style: Theme.of(context).textTheme.bodySmall
+                        ?.copyWith(fontWeight: FontWeight.w600),
                   ),
               ],
             ),
@@ -263,9 +260,9 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
                         ),
                         decoration: BoxDecoration(
                           color: next.vehicleLocation == null
-                              ? Theme.of(
-                                  context,
-                                ).colorScheme.surfaceContainerHighest
+                              ? Theme.of(context)
+                                    .colorScheme
+                                    .surfaceContainerHighest
                               : EntreggoColors.accent.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(10),
                           border: next.vehicleLocation == null
@@ -411,7 +408,9 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
 
 String _duration(int seconds) {
   final m = (seconds / 60).round();
-  return m < 60 ? '$m min' : '${m ~/ 60}h${(m % 60).toString().padLeft(2, '0')}';
+  return m < 60
+      ? '$m min'
+      : '${m ~/ 60}h${(m % 60).toString().padLeft(2, '0')}';
 }
 
 /// Linha da lista de paradas: a próxima fica em destaque, com o horário

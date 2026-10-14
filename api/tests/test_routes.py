@@ -140,12 +140,10 @@ def test_vehicle_location(client, auth, other_auth, route_id):
     detail = client.get(f"/v1/routes/{route_id}", headers=auth).json()
     assert detail["packages"][0]["vehicle_location"] == "Fundo • Meio • Prateleira"
 
-    assert client.patch(url, json={"location": " "}, headers=auth).json()[
-        "vehicle_location"
-    ] is None
     assert (
-        client.patch(url, json={"location": "x" * 61}, headers=auth).status_code == 422
+        client.patch(url, json={"location": " "}, headers=auth).json()["vehicle_location"] is None
     )
+    assert client.patch(url, json={"location": "x" * 61}, headers=auth).status_code == 422
 
 
 def test_delete_package(client, auth, other_auth, route_id):
