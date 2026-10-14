@@ -63,6 +63,9 @@ class PackageOut(ORMModel):
     address_status: AddressStatus
     status: PackageStatus
     scanned_at: datetime | None = None
+    recipient_name: str | None = None
+    delivered_at: datetime | None = None
+    has_proof_photo: bool = False
 
 
 class StopOut(ORMModel):
@@ -111,6 +114,9 @@ class RouteDetail(RouteOut):
 class StatusUpdate(BaseModel):
     status: PackageStatus
     note: str | None = Field(default=None, max_length=500)
+    recipient_name: str | None = Field(default=None, max_length=120)
+    lat: float | None = Field(default=None, ge=-90, le=90)
+    lng: float | None = Field(default=None, ge=-180, le=180)
 
 
 class GeocodeResult(BaseModel):

@@ -63,7 +63,7 @@ def list_routes(user: User = Depends(get_current_user), db: Session = Depends(ge
         select(Route)
         .where(Route.user_id == user.id)
         .order_by(Route.created_at.desc())
-        .options(selectinload(Route.packages))
+        .options(selectinload(Route.packages).joinedload(Package.proof))
     ).all()
 
 

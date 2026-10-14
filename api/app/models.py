@@ -91,6 +91,21 @@ class Package(TimestampMixin, Base):
     scanned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     route: Mapped[Route] = relationship(back_populates="packages")
+    proof: Mapped["DeliveryProof | None"] = relationship(
+        cascade="all, delete-orphan", single_parent=True
+    )
+
+    @property
+    def recipient_name(self) -> str | None:
+        return self.proof.recipient_name if self.proof else None
+
+    @property
+    def delivered_at(self) -> datetime | None:
+        return self.proof.created_at if self.proof else None
+
+    @property
+    def has_proof_photo(self) -> bool:
+        return bool(self.proof and self.proof.photo)
 
 
 class RouteStop(Base):
@@ -127,6 +142,24 @@ class UserPhoto(Base):
     data: Mapped[bytes] = mapped_column(LargeBinary)
     content_type: Mapped[str] = mapped_column(String(50))
     updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )
+
+
+class DeliveryProof(Base):
+    """Comprovante de entrega/tentativa: foto no local, recebedor, GPS e horário."""
+
+    __tablename__ = "delivery_proofs"
+
+    package_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("packages.id", ondelete="CASCADE"), primary_key=True
+    )
+    recipient_name: Mapped[str | None] = mapped_column(String(120))
+    lat: Mapped[float | None] = mapped_column(Float)
+    lng: Mapped[float | None] = mapped_column(Float)
+    photo: Mapped[bytes | None] = mapped_column(LargeBinary)
+    photo_content_type: Mapped[str | None] = mapped_column(String(50))
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow
     )
 

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:geolocator/geolocator.dart';
 
 import '../api/api_client.dart';
+import 'location.dart';
 
 /// "Montar rota": valida os endereços, obtém a posição atual e calcula a ordem das paradas.
 /// Retorna `true` quando a rota foi otimizada.
@@ -47,7 +47,7 @@ Future<bool> buildRoute(
     }
 
     step.value = 'Obtendo sua localização...';
-    final position = await _currentPosition();
+    final position = await currentPosition();
     String? startAddress;
     if (position == null) {
       progress.hide();
@@ -79,28 +79,6 @@ Future<bool> buildRoute(
   } finally {
     progress.hide();
     step.dispose();
-  }
-}
-
-Future<Position?> _currentPosition() async {
-  try {
-    if (!await Geolocator.isLocationServiceEnabled()) return null;
-    var permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-    }
-    if (permission == LocationPermission.denied ||
-        permission == LocationPermission.deniedForever) {
-      return null;
-    }
-    return await Geolocator.getCurrentPosition(
-      locationSettings: const LocationSettings(
-        accuracy: LocationAccuracy.high,
-        timeLimit: Duration(seconds: 15),
-      ),
-    );
-  } catch (_) {
-    return Geolocator.getLastKnownPosition();
   }
 }
 

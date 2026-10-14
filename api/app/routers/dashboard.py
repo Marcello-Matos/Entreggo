@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.auth import get_current_user
 from app.db import get_db
-from app.models import Route, User
+from app.models import Package, Route, User
 from app.schemas import ActiveRoute, DashboardOut
 
 router = APIRouter(prefix="/v1/dashboard", tags=["dashboard"])
@@ -29,7 +29,10 @@ def dashboard(
         select(Route)
         .where(Route.user_id == user.id, Route.created_at >= since)
         .order_by(Route.created_at.desc())
-        .options(selectinload(Route.packages), selectinload(Route.stops))
+        .options(
+            selectinload(Route.packages).joinedload(Package.proof),
+            selectinload(Route.stops),
+        )
     ).all()
     counts = Counter(p.status for r in routes for p in r.packages)
     total = sum(counts.values())

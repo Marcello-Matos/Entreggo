@@ -159,11 +159,45 @@ class ApiClient {
     return summary;
   }
 
-  Future<void> updateStatus(String packageId, String status) => _send(
+  /// Atualiza o status; `note` guarda o motivo padronizado da falha e
+  /// `recipientName`/`lat`/`lng` compõem o comprovante de entrega.
+  Future<void> updateStatus(
+    String packageId,
+    String status, {
+    String? note,
+    String? recipientName,
+    double? lat,
+    double? lng,
+  }) => _send(
     'PATCH',
     '/v1/packages/$packageId/status',
-    body: {'status': status},
+    body: {
+      'status': status,
+      'note': note,
+      'recipient_name': recipientName,
+      'lat': lat,
+      'lng': lng,
+    },
   );
+
+  /// Foto do pacote no local (comprovante de entrega/tentativa).
+  Future<void> uploadDeliveryPhoto(
+    String packageId,
+    List<int> bytes, {
+    String filename = 'entrega.jpg',
+  }) async {
+    final token = await tokenProvider();
+    final request =
+        http.MultipartRequest(
+            'PUT',
+            Uri.parse('$baseUrl/v1/packages/$packageId/photo'),
+          )
+          ..headers['Authorization'] = 'Bearer ${token ?? ''}'
+          ..files.add(
+            http.MultipartFile.fromBytes('file', bytes, filename: filename),
+          );
+    await _decode(request);
+  }
 
   Future<void> deletePackage(String packageId) =>
       _send('DELETE', '/v1/packages/$packageId');

@@ -18,7 +18,10 @@ def get_owned_route(db: Session, route_id: uuid.UUID, user: User) -> Route:
     route = db.scalar(
         select(Route)
         .where(Route.id == route_id)
-        .options(selectinload(Route.packages), selectinload(Route.stops))
+        .options(
+            selectinload(Route.packages).joinedload(Package.proof),
+            selectinload(Route.stops),
+        )
     )
     if route is None or route.user_id != user.id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Rota não encontrada")

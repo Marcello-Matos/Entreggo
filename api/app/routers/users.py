@@ -4,34 +4,11 @@ from sqlalchemy.orm import Session
 from app.auth import get_current_user
 from app.db import get_db
 from app.models import User, UserPhoto
+from app.services.images import detect_image_type
 
 router = APIRouter(prefix="/v1/users", tags=["users"])
 
 MAX_PHOTO_BYTES = 5 * 1024 * 1024
-
-# Assinaturas (magic bytes) dos formatos que o app consegue exibir.
-# Fotos do iPhone costumam chegar como HEIC ou com tipo "octet-stream",
-# então o formato é detectado pelo conteúdo, não pelo Content-Type declarado.
-_HEIC_BRANDS = {b"heic", b"heix", b"hevc", b"hevx", b"heim", b"heis", b"mif1", b"msf1"}
-
-
-def _detect_image_type(data: bytes) -> str | None:
-    if data.startswith(b"\xff\xd8\xff"):
-        return "image/jpeg"
-    if data.startswith(b"\x89PNG\r\n\x1a\n"):
-        return "image/png"
-    if data[:6] in (b"GIF87a", b"GIF89a"):
-        return "image/gif"
-    if data[:2] == b"BM":
-        return "image/bmp"
-    if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
-        return "image/webp"
-    if len(data) >= 12 and data[4:8] == b"ftyp":
-        if data[8:12] in _HEIC_BRANDS:
-            return "image/heic"
-        if data[8:12] == b"avif":
-            return "image/avif"
-    return None
 
 
 @router.put("/me/photo", status_code=status.HTTP_204_NO_CONTENT)
@@ -46,7 +23,7 @@ async def upload_photo(
         raise HTTPException(
             status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "Foto muito grande (máx. 5 MB)"
         )
-    media_type = _detect_image_type(content)
+    media_type = detect_image_type(content)
     if media_type is None and (file.content_type or "").startswith("image/"):
         media_type = file.content_type
     if media_type is None:

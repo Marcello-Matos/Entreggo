@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 
 import '../api/api_client.dart';
 import '../api/models.dart';
+import '../routing/location.dart';
 import '../routing/navigation.dart';
 import '../theme.dart';
+import '../widgets/proof_sheet.dart';
 import '../widgets/status.dart';
 
 /// Modo entrega: mostra a próxima parada, abre a navegação e avança ao marcar o status.
@@ -18,9 +21,7 @@ class DeliveryScreen extends StatefulWidget {
 }
 
 class _DeliveryScreenState extends State<DeliveryScreen> {
-  late final Future<RouteDetail> _detail = widget.api.getRoute(
-    widget.routeId,
-  );
+  late final Future<RouteDetail> _detail = widget.api.getRoute(widget.routeId);
   bool _busy = false;
 
   void _toast(String message) =>
@@ -33,11 +34,38 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
   }
 
   Future<void> _mark(Package stop, String status) async {
+    ProofData? proof;
+    Future<Position?>? position;
+    if (status != 'skipped') {
+      // O GPS já começa a ser obtido enquanto o motorista preenche os dados.
+      position = currentPosition();
+      proof = await showProofSheet(context, delivered: status == 'delivered');
+      if (proof == null || !mounted) return;
+    }
     setState(() => _busy = true);
     try {
       // O PATCH já confirma o novo status: atualiza o pacote em memória e
       // evita baixar a rota inteira de novo a cada entrega.
-      await widget.api.updateStatus(stop.id, status);
+      final pos = await position;
+      await widget.api.updateStatus(
+        stop.id,
+        status,
+        note: proof?.note,
+        recipientName: proof?.recipientName,
+        lat: pos?.latitude,
+        lng: pos?.longitude,
+      );
+      if (proof?.photo case final photo?) {
+        try {
+          await widget.api.uploadDeliveryPhoto(
+            stop.id,
+            photo,
+            filename: proof?.photoName ?? 'entrega.jpg',
+          );
+        } catch (_) {
+          _toast('Status registrado, mas a foto não foi enviada');
+        }
+      }
       if (mounted) setState(() => stop.status = status);
     } on ApiException catch (e) {
       _toast(e.message);

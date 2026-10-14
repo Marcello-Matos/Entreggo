@@ -122,6 +122,9 @@ class Package {
     this.deliveryNotes,
     this.lat,
     this.lng,
+    this.recipientName,
+    this.deliveredAt,
+    this.hasProofPhoto = false,
   });
 
   factory Package.fromJson(Map<String, dynamic> j) => Package(
@@ -136,6 +139,10 @@ class Package {
     deliveryNotes: j['delivery_notes'] as String?,
     lat: (j['lat'] as num?)?.toDouble(),
     lng: (j['lng'] as num?)?.toDouble(),
+    recipientName: j['recipient_name'] as String?,
+    deliveredAt: DateTime.tryParse(j['delivered_at'] as String? ?? '')
+        ?.toLocal(),
+    hasProofPhoto: j['has_proof_photo'] as bool? ?? false,
   );
 
   final String id;
@@ -152,6 +159,11 @@ class Package {
   final String? deliveryNotes;
   final double? lat;
   final double? lng;
+
+  /// Comprovante: quem recebeu e quando (registrado pelo servidor).
+  final String? recipientName;
+  final DateTime? deliveredAt;
+  final bool hasProofPhoto;
 
   bool get hasCoordinates => lat != null && lng != null;
 
