@@ -7,13 +7,30 @@ import '../theme.dart';
 
 /// Dados do comprovante coletados na confirmação de entrega/tentativa.
 class ProofData {
-  const ProofData({this.recipientName, this.note, this.photo, this.photoName});
+  const ProofData({
+    this.recipientName,
+    this.deliveryMethod,
+    this.note,
+    this.photo,
+    this.photoName,
+  });
 
   final String? recipientName;
+  final String? deliveryMethod;
   final String? note;
   final Uint8List? photo;
   final String? photoName;
 }
+
+/// Como a entrega foi concluída (vai para o comprovante).
+const deliveryMethods = [
+  (label: 'Cliente assinou', icon: Icons.draw_outlined),
+  (label: 'Porteiro', icon: Icons.door_front_door_outlined),
+  (label: 'Caixa de correio', icon: Icons.markunread_mailbox_outlined),
+  (label: 'Vizinho', icon: Icons.people_outline),
+  (label: 'Recepção', icon: Icons.desk_outlined),
+  (label: 'Outro', icon: Icons.more_horiz),
+];
 
 const failureReasons = [
   'Destinatário ausente',
@@ -53,6 +70,7 @@ class _ProofSheetState extends State<_ProofSheet> {
   Uint8List? _photo;
   String? _photoName;
   String? _reason;
+  String? _method;
 
   @override
   void dispose() {
@@ -84,6 +102,7 @@ class _ProofSheetState extends State<_ProofSheet> {
       recipientName: _recipient.text.trim().isEmpty
           ? null
           : _recipient.text.trim(),
+      deliveryMethod: _method,
       note: [
         ?_reason,
         if (_note.text.trim().isNotEmpty) _note.text.trim(),
@@ -110,33 +129,69 @@ class _ProofSheetState extends State<_ProofSheet> {
                   ?.copyWith(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 14),
-            InkWell(
-              borderRadius: BorderRadius.circular(14),
-              onTap: _takePhoto,
-              child: Container(
-                height: 140,
-                decoration: BoxDecoration(
-                  color: EntreggoColors.background,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: const Color(0xFFE2E8F0)),
-                ),
-                clipBehavior: Clip.antiAlias,
-                child: _photo != null
-                    ? Image.memory(_photo!, fit: BoxFit.cover)
-                    : const Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.photo_camera_outlined,
-                            size: 34,
-                            color: EntreggoColors.primary,
-                          ),
-                          SizedBox(height: 6),
-                          Text('Foto do pacote no local (opcional)'),
-                        ],
+            if (_photo == null)
+              InkWell(
+                borderRadius: BorderRadius.circular(14),
+                onTap: _takePhoto,
+                child: Container(
+                  height: 140,
+                  decoration: BoxDecoration(
+                    color: EntreggoColors.background,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                  ),
+                  child: const Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.photo_camera_outlined,
+                        size: 34,
+                        color: EntreggoColors.primary,
                       ),
+                      SizedBox(height: 6),
+                      Text('Foto do pacote no local (opcional)'),
+                    ],
+                  ),
+                ),
+              )
+            else ...[
+              ClipRRect(
+                borderRadius: BorderRadius.circular(14),
+                child: Image.memory(
+                  _photo!,
+                  height: 180,
+                  width: double.infinity,
+                  fit: BoxFit.cover,
+                ),
               ),
-            ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Icon(
+                    Icons.check_circle,
+                    size: 18,
+                    color: Colors.green.shade600,
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      'Foto adicionada',
+                      style: TextStyle(color: Colors.green.shade700),
+                    ),
+                  ),
+                  TextButton.icon(
+                    onPressed: _takePhoto,
+                    icon: const Icon(Icons.photo_camera_outlined, size: 18),
+                    label: const Text('Tirar novamente'),
+                  ),
+                  IconButton(
+                    tooltip: 'Remover foto',
+                    onPressed: () => setState(() => _photo = null),
+                    icon: const Icon(Icons.delete_outline, size: 20),
+                  ),
+                ],
+              ),
+            ],
             const SizedBox(height: 14),
             if (delivered) ...[
               TextField(
@@ -144,8 +199,30 @@ class _ProofSheetState extends State<_ProofSheet> {
                 textCapitalization: TextCapitalization.words,
                 decoration: const InputDecoration(
                   labelText: 'Recebido por (opcional)',
-                  hintText: 'Nome de quem recebeu',
+                  hintText: 'Ex.: Cliente, Porteiro, Vizinho...',
                 ),
+              ),
+              const SizedBox(height: 14),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Como foi a entrega?',
+                  style: Theme.of(context).textTheme.labelLarge,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final m in deliveryMethods)
+                    ChoiceChip(
+                      avatar: Icon(m.icon, size: 18),
+                      label: Text(m.label),
+                      selected: _method == m.label,
+                      onSelected: (_) => setState(() => _method = m.label),
+                    ),
+                ],
               ),
             ] else ...[
               Align(

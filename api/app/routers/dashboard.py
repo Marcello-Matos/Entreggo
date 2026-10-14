@@ -38,6 +38,22 @@ def dashboard(
     total = sum(counts.values())
     done = total - counts["pending"]
     active = next((r for r in routes if r.pending_packages), None)
+    next_address = next_eta = None
+    remaining_seconds = None
+    if active and active.stops:
+        by_id = {p.id: p for p in active.packages}
+        pending_stops = sorted(
+            (s for s in active.stops if by_id[s.package_id].status == "pending"),
+            key=lambda s: s.sequence,
+        )
+        if pending_stops:
+            next_address = by_id[pending_stops[0].package_id].address_text
+            next_eta = pending_stops[0].eta_estimate
+            etas = [s.eta_estimate for s in active.stops if s.eta_estimate]
+            if etas and next_eta:
+                remaining_seconds = max(
+                    0, round((max(etas) - next_eta).total_seconds())
+                )
     return DashboardOut(
         packages=total,
         delivered=counts["delivered"],
@@ -50,6 +66,9 @@ def dashboard(
             title=active.title,
             remaining=active.pending_packages,
             optimized=bool(active.stops),
+            next_address=next_address,
+            next_eta=next_eta,
+            remaining_seconds=remaining_seconds,
         )
         if active
         else None,

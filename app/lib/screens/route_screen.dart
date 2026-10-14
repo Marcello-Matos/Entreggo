@@ -507,6 +507,16 @@ class _RouteScreenState extends State<RouteScreen> {
             ),
           for (final pkg in packages)
             Card(
+              elevation: 0,
+              shape: pkg == detail.nextStop
+                  ? RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      side: const BorderSide(
+                        color: EntreggoColors.primary,
+                        width: 1.5,
+                      ),
+                    )
+                  : null,
               child: ListTile(
                 onTap: () => _packageMenu(pkg),
                 leading: CircleAvatar(
@@ -535,6 +545,11 @@ class _RouteScreenState extends State<RouteScreen> {
                         Text(
                           pkg.trackingCode!,
                           style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      if (pkg == detail.nextStop)
+                        const StatusChip(
+                          label: 'PRÓXIMA',
+                          color: EntreggoColors.primary,
                         ),
                       StatusChip(
                         label: packageStatusLabels[pkg.status] ?? pkg.status,

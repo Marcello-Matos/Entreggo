@@ -64,6 +64,7 @@ class PackageOut(ORMModel):
     status: PackageStatus
     scanned_at: datetime | None = None
     recipient_name: str | None = None
+    delivery_method: str | None = None
     delivered_at: datetime | None = None
     has_proof_photo: bool = False
     vehicle_location: str | None = None
@@ -94,6 +95,9 @@ class ActiveRoute(BaseModel):
     title: str
     remaining: int
     optimized: bool
+    next_address: str | None = None
+    next_eta: datetime | None = None
+    remaining_seconds: int | None = None
 
 
 class DashboardOut(BaseModel):
@@ -120,6 +124,7 @@ class StatusUpdate(BaseModel):
     status: PackageStatus
     note: str | None = Field(default=None, max_length=500)
     recipient_name: str | None = Field(default=None, max_length=120)
+    delivery_method: str | None = Field(default=None, max_length=30)
     lat: float | None = Field(default=None, ge=-90, le=90)
     lng: float | None = Field(default=None, ge=-180, le=180)
 

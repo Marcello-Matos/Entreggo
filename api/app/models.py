@@ -102,6 +102,10 @@ class Package(TimestampMixin, Base):
         return self.proof.recipient_name if self.proof else None
 
     @property
+    def delivery_method(self) -> str | None:
+        return self.proof.delivery_method if self.proof else None
+
+    @property
     def delivered_at(self) -> datetime | None:
         return self.proof.created_at if self.proof else None
 
@@ -157,6 +161,8 @@ class DeliveryProof(Base):
         ForeignKey("packages.id", ondelete="CASCADE"), primary_key=True
     )
     recipient_name: Mapped[str | None] = mapped_column(String(120))
+    # Como a entrega foi feita: assinatura, porteiro, vizinho... — v1.5+
+    delivery_method: Mapped[str | None] = mapped_column(String(30))
     lat: Mapped[float | None] = mapped_column(Float)
     lng: Mapped[float | None] = mapped_column(Float)
     photo: Mapped[bytes | None] = mapped_column(LargeBinary)

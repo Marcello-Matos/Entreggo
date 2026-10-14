@@ -6,6 +6,7 @@ import '../auth/auth_service.dart';
 import '../theme.dart';
 import '../widgets/logo.dart';
 import '../widgets/profile_avatar.dart';
+import '../widgets/status.dart';
 import 'history_screen.dart';
 import 'map_screen.dart';
 import 'route_screen.dart';
@@ -115,6 +116,13 @@ class _HomeScreenState extends State<HomeScreen> {
                             _ErrorBox(error: snap.error!, onRetry: _reload)
                           else
                             _Summary(dash: dash ?? const Dashboard()),
+                          if (dash?.activeRouteId != null) ...[
+                            const SizedBox(height: 16),
+                            _ActiveRouteCard(
+                              dash: dash!,
+                              onTap: () => _openActive(dash),
+                            ),
+                          ],
                           const SizedBox(height: 18),
                           FilledButton.icon(
                             style: FilledButton.styleFrom(
@@ -140,22 +148,6 @@ class _HomeScreenState extends State<HomeScreen> {
                             ),
                             child: Column(
                               children: [
-                                _MenuTile(
-                                  icon: Icons.route_outlined,
-                                  title: 'Minha rota',
-                                  subtitle: dash?.activeRouteId == null
-                                      ? 'Nenhuma rota em andamento'
-                                      : '${dash!.activeRemaining} '
-                                            '${dash.activeRemaining == 1 ? 'parada restante' : 'paradas restantes'}',
-                                  onTap: dash?.activeRouteId == null
-                                      ? null
-                                      : () => _openActive(dash!),
-                                ),
-                                const Divider(
-                                  height: 1,
-                                  indent: 16,
-                                  endIndent: 16,
-                                ),
                                 _MenuTile(
                                   icon: Icons.history,
                                   title: 'Histórico de entregas',
@@ -314,12 +306,7 @@ class _Summary extends StatelessWidget {
               background: const Color(0xFFFFF4E5),
             ),
             const SizedBox(width: 12),
-            _Tile(
-              label: 'Progresso',
-              value: '$percent%',
-              color: const Color(0xFF7C3AED),
-              background: const Color(0xFFF3EEFE),
-            ),
+            _RingTile(progress: dash.progress, percent: percent),
           ],
         ),
         const SizedBox(height: 16),
@@ -339,6 +326,145 @@ class _Summary extends StatelessWidget {
           style: Theme.of(context).textTheme.bodySmall,
         ),
       ],
+    );
+  }
+}
+
+/// Anel de progresso: percentual grande com a legenda "do dia".
+class _RingTile extends StatelessWidget {
+  const _RingTile({required this.progress, required this.percent});
+
+  final double progress;
+  final int percent;
+
+  @override
+  Widget build(BuildContext context) => Expanded(
+    child: Container(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF3EEFE),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 52,
+            height: 52,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                CircularProgressIndicator(
+                  value: progress,
+                  strokeWidth: 6,
+                  backgroundColor: const Color(0xFFDCCFFA),
+                  color: const Color(0xFF7C3AED),
+                  strokeCap: StrokeCap.round,
+                ),
+                Text(
+                  '$percent%',
+                  style: const TextStyle(
+                    color: Color(0xFF7C3AED),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          const Expanded(
+            child: Text(
+              'Progresso\ndo dia',
+              style: TextStyle(color: Color(0xFF7C3AED), fontSize: 15),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+/// Rota em andamento: próxima parada, paradas e tempo restante estimado.
+class _ActiveRouteCard extends StatelessWidget {
+  const _ActiveRouteCard({required this.dash, required this.onTap});
+
+  final Dashboard dash;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final remaining = dash.activeRemaining;
+    return Material(
+      color: EntreggoColors.primary.withValues(alpha: 0.06),
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  const Icon(
+                    Icons.route_outlined,
+                    size: 20,
+                    color: EntreggoColors.primary,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      dash.activeRouteTitle ?? 'Rota em andamento',
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                  StatusChip(
+                    label: 'Em progresso',
+                    color: Colors.green.shade700,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Text(
+                [
+                  '$remaining ${remaining == 1 ? 'parada restante' : 'paradas restantes'}',
+                  if (dash.remainingLabel.isNotEmpty)
+                    '${dash.remainingLabel} restantes',
+                ].join('  •  '),
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              if (dash.nextAddress != null) ...[
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.location_on_outlined,
+                      size: 18,
+                      color: EntreggoColors.accent,
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        'Próxima: ${dash.nextAddress}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const Icon(
+                      Icons.chevron_right,
+                      size: 18,
+                      color: EntreggoColors.slate,
+                    ),
+                  ],
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

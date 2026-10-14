@@ -166,6 +166,7 @@ class ApiClient {
     String status, {
     String? note,
     String? recipientName,
+    String? deliveryMethod,
     double? lat,
     double? lng,
   }) => _send(
@@ -175,6 +176,7 @@ class ApiClient {
       'status': status,
       'note': note,
       'recipient_name': recipientName,
+      'delivery_method': deliveryMethod,
       'lat': lat,
       'lng': lng,
     },

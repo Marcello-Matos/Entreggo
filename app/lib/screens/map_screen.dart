@@ -4,6 +4,7 @@ import 'package:latlong2/latlong.dart';
 
 import '../api/api_client.dart';
 import '../api/models.dart';
+import '../routing/location.dart';
 import '../theme.dart';
 import '../widgets/status.dart';
 import 'delivery_screen.dart';
@@ -22,6 +23,18 @@ class MapScreen extends StatefulWidget {
 
 class _MapScreenState extends State<MapScreen> {
   late Future<RouteDetail> _detail = widget.api.getRoute(widget.routeId);
+  LatLng? _me;
+
+  @override
+  void initState() {
+    super.initState();
+    // Posição atual do motorista, marcada no mapa quando disponível.
+    currentPosition().then((pos) {
+      if (pos != null && mounted) {
+        setState(() => _me = LatLng(pos.latitude, pos.longitude));
+      }
+    });
+  }
 
   void _reload() =>
       setState(() => _detail = widget.api.getRoute(widget.routeId));
@@ -114,6 +127,8 @@ class _MapScreenState extends State<MapScreen> {
                 height: 40,
                 child: const _StartPin(),
               ),
+            if (_me != null)
+              Marker(point: _me!, width: 24, height: 24, child: const _MePin()),
             for (final p in stops.reversed)
               Marker(
                 point: LatLng(p.lat!, p.lng!),
@@ -164,6 +179,20 @@ class _MapScreenState extends State<MapScreen> {
               style: Theme.of(context).textTheme.titleMedium
                   ?.copyWith(fontWeight: FontWeight.w700),
             ),
+            if (detail.nextStop != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  'Próxima: ${detail.nextStop!.addressText ?? 'parada ${detail.sequence[detail.nextStop!.id]}'}',
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: EntreggoColors.accent,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
             if (outside > 0)
               Padding(
                 padding: const EdgeInsets.only(top: 4),
@@ -232,6 +261,21 @@ class _StopPin extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Ponto azul da posição atual do motorista (estilo Google Maps).
+class _MePin extends StatelessWidget {
+  const _MePin();
+
+  @override
+  Widget build(BuildContext context) => Container(
+    decoration: BoxDecoration(
+      color: const Color(0xFF1A73E8),
+      shape: BoxShape.circle,
+      border: Border.all(color: Colors.white, width: 3),
+      boxShadow: const [BoxShadow(color: Colors.black38, blurRadius: 6)],
+    ),
+  );
 }
 
 class _StartPin extends StatelessWidget {

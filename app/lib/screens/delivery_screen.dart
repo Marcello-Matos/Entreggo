@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 
@@ -53,6 +55,7 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
         status,
         note: proof?.note,
         recipientName: proof?.recipientName,
+        deliveryMethod: proof?.deliveryMethod,
         lat: pos?.latitude,
         lng: pos?.longitude,
       );
@@ -67,7 +70,10 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
           _toast('Status registrado, mas a foto não foi enviada');
         }
       }
-      if (mounted) setState(() => stop.status = status);
+      if (mounted) {
+        setState(() => stop.status = status);
+        if (status == 'delivered') unawaited(_showDelivered());
+      }
     } on ApiException catch (e) {
       _toast(e.message);
     } catch (e) {
@@ -75,6 +81,17 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  /// Feedback animado rápido ao concluir a entrega (check + próxima parada).
+  Future<void> _showDelivered() async {
+    final overlay = Overlay.of(context);
+    final entry = OverlayEntry(
+      builder: (_) => const _DeliveredOverlay(),
+    );
+    overlay.insert(entry);
+    await Future<void>.delayed(const Duration(milliseconds: 1400));
+    entry.remove();
   }
 
   /// Posição do pacote no veículo — ajuda a achar a encomenda na parada.
@@ -105,22 +122,11 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
         controller: scroll,
         children: [
           for (final p in detail.stops)
-            ListTile(
-              leading: CircleAvatar(
-                backgroundColor: packageStatusColor(p.status)
-                    .withValues(alpha: 0.12),
-                child: Text(
-                  '${detail.sequence[p.id]}',
-                  style: TextStyle(color: packageStatusColor(p.status)),
-                ),
-              ),
-              title: Text(p.addressText ?? p.trackingCode ?? 'Pacote'),
-              subtitle: Text(
-                [
-                  packageStatusLabels[p.status] ?? p.status,
-                  if (p.vehicleLocation != null) '📦 ${p.vehicleLocation}',
-                ].join(' • '),
-              ),
+            _StopTile(
+              pkg: p,
+              number: detail.sequence[p.id]!,
+              isNext: identical(p, detail.nextStop),
+              eta: detail.etas[p.id],
             ),
         ],
       ),
@@ -174,9 +180,25 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
               borderRadius: BorderRadius.circular(8),
             ),
             const SizedBox(height: 8),
-            Text(
-              '$done de ${stops.length} concluídas',
-              style: Theme.of(context).textTheme.bodySmall,
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    '$done de ${stops.length} concluídas',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ),
+                if (detail.remainingSeconds != null)
+                  Text(
+                    [
+                      '${stops.length - done} restantes',
+                      '≈ ${_duration(detail.remainingSeconds!)}',
+                    ].join(' • '),
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+              ],
             ),
             const SizedBox(height: 16),
             Card(
@@ -381,6 +403,158 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
               child: const Text('Voltar ao início'),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+String _duration(int seconds) {
+  final m = (seconds / 60).round();
+  return m < 60 ? '$m min' : '${m ~/ 60}h${(m % 60).toString().padLeft(2, '0')}';
+}
+
+/// Linha da lista de paradas: a próxima fica em destaque, com o horário
+/// estimado; as concluídas mostram o status e o local no veículo.
+class _StopTile extends StatelessWidget {
+  const _StopTile({
+    required this.pkg,
+    required this.number,
+    required this.isNext,
+    this.eta,
+  });
+
+  final Package pkg;
+  final int number;
+  final bool isNext;
+  final DateTime? eta;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = packageStatusColor(pkg.status);
+    final tile = ListTile(
+      leading: CircleAvatar(
+        backgroundColor: color.withValues(alpha: 0.12),
+        child: Text('$number', style: TextStyle(color: color)),
+      ),
+      title: Text(
+        pkg.addressText ?? pkg.trackingCode ?? 'Pacote',
+        style: isNext ? const TextStyle(fontWeight: FontWeight.w700) : null,
+      ),
+      subtitle: Text(
+        [
+          packageStatusLabels[pkg.status] ?? pkg.status,
+          if (pkg.vehicleLocation != null) pkg.vehicleLocation!,
+        ].join(' • '),
+      ),
+      trailing: eta != null
+          ? Text(
+              '${eta!.hour.toString().padLeft(2, '0')}:'
+              '${eta!.minute.toString().padLeft(2, '0')}',
+              style: Theme.of(context).textTheme.bodySmall,
+            )
+          : null,
+    );
+    if (!isNext) return tile;
+    return Card(
+      elevation: 0,
+      color: EntreggoColors.primary.withValues(alpha: 0.08),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: const BorderSide(color: EntreggoColors.primary),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 10, 16, 0),
+            child: Text(
+              'PRÓXIMA',
+              style: TextStyle(
+                color: EntreggoColors.primary,
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1.1,
+              ),
+            ),
+          ),
+          tile,
+        ],
+      ),
+    );
+  }
+}
+
+/// Check animado exibido por ~1,4 s após confirmar a entrega.
+class _DeliveredOverlay extends StatefulWidget {
+  const _DeliveredOverlay();
+
+  @override
+  State<_DeliveredOverlay> createState() => _DeliveredOverlayState();
+}
+
+class _DeliveredOverlayState extends State<_DeliveredOverlay>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 450),
+  )..forward();
+  late final Animation<double> _scale = CurvedAnimation(
+    parent: _controller,
+    curve: Curves.elasticOut,
+  );
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: ColoredBox(
+        color: Colors.black45,
+        child: Center(
+          child: ScaleTransition(
+            scale: _scale,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(18),
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.check_rounded,
+                    size: 64,
+                    color: Colors.green.shade600,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Entrega confirmada!',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                    decoration: TextDecoration.none,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  'Seguindo para a próxima parada',
+                  style: TextStyle(
+                    color: Colors.white70,
+                    fontSize: 14,
+                    decoration: TextDecoration.none,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );

@@ -21,6 +21,12 @@ async def lifespan(_: FastAPI):
                     "ADD COLUMN IF NOT EXISTS vehicle_location VARCHAR(60)"
                 )
             )
+            conn.execute(
+                text(
+                    "ALTER TABLE delivery_proofs "
+                    "ADD COLUMN IF NOT EXISTS delivery_method VARCHAR(30)"
+                )
+            )
     yield
 
 

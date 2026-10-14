@@ -67,12 +67,16 @@ def update_status(
     pkg.status = body.status
     db.add(DeliveryEvent(package_id=pkg.id, event_type=f"status:{body.status}", note=body.note))
     if body.status != "pending" and (
-        body.recipient_name or body.lat is not None or body.lng is not None
+        body.recipient_name
+        or body.delivery_method
+        or body.lat is not None
+        or body.lng is not None
     ):
         # Comprovante: recebedor e/ou posição registrados no ato da entrega.
         proof = pkg.proof or DeliveryProof(package_id=pkg.id)
         pkg.proof = proof
         proof.recipient_name = body.recipient_name or proof.recipient_name
+        proof.delivery_method = body.delivery_method or proof.delivery_method
         proof.lat = body.lat if body.lat is not None else proof.lat
         proof.lng = body.lng if body.lng is not None else proof.lng
         db.add(proof)

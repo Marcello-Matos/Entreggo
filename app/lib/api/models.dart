@@ -54,6 +54,8 @@ class Dashboard {
     this.activeRouteTitle,
     this.activeRemaining = 0,
     this.activeOptimized = false,
+    this.nextAddress,
+    this.remainingSeconds,
   });
 
   factory Dashboard.fromJson(Map<String, dynamic> j) {
@@ -69,6 +71,8 @@ class Dashboard {
       activeRouteTitle: active?['title'] as String?,
       activeRemaining: active?['remaining'] as int? ?? 0,
       activeOptimized: active?['optimized'] as bool? ?? false,
+      nextAddress: active?['next_address'] as String?,
+      remainingSeconds: active?['remaining_seconds'] as int?,
     );
   }
 
@@ -82,6 +86,17 @@ class Dashboard {
   final String? activeRouteTitle;
   final int activeRemaining;
   final bool activeOptimized;
+
+  /// Próxima parada da rota ativa e tempo estimado para concluir o restante.
+  final String? nextAddress;
+  final int? remainingSeconds;
+
+  String get remainingLabel {
+    final s = remainingSeconds;
+    if (s == null) return '';
+    final m = (s / 60).round();
+    return m < 60 ? '$m min' : '${m ~/ 60}h${(m % 60).toString().padLeft(2, '0')}';
+  }
 }
 
 /// Dados de endereço enviados ao criar/corrigir um pacote.
@@ -123,6 +138,7 @@ class Package {
     this.lat,
     this.lng,
     this.recipientName,
+    this.deliveryMethod,
     this.deliveredAt,
     this.hasProofPhoto = false,
     this.vehicleLocation,
@@ -141,6 +157,7 @@ class Package {
     lat: (j['lat'] as num?)?.toDouble(),
     lng: (j['lng'] as num?)?.toDouble(),
     recipientName: j['recipient_name'] as String?,
+    deliveryMethod: j['delivery_method'] as String?,
     deliveredAt: DateTime.tryParse(j['delivered_at'] as String? ?? '')
         ?.toLocal(),
     hasProofPhoto: j['has_proof_photo'] as bool? ?? false,
@@ -162,8 +179,9 @@ class Package {
   final double? lat;
   final double? lng;
 
-  /// Comprovante: quem recebeu e quando (registrado pelo servidor).
+  /// Comprovante: quem recebeu, como e quando (registrado pelo servidor).
   final String? recipientName;
+  final String? deliveryMethod;
   final DateTime? deliveredAt;
   final bool hasProofPhoto;
 
@@ -185,6 +203,7 @@ class RouteDetail {
     required this.route,
     required this.packages,
     required this.sequence,
+    required this.etas,
     this.optimization,
   });
 
@@ -199,11 +218,17 @@ class RouteDetail {
         (s as Map<String, dynamic>)['package_id'] as String:
             s['sequence'] as int,
     },
+    etas: {
+      for (final s in j['stops'] as List)
+        (s as Map<String, dynamic>)['package_id'] as String:
+            DateTime.tryParse(s['eta_estimate'] as String? ?? '')?.toLocal(),
+    },
     optimization: j['optimization'] as Map<String, dynamic>?,
   );
 
   final DeliveryRoute route;
   final List<Package> packages;
+  final Map<String, DateTime?> etas;
 
   /// package_id -> posição na ordem sugerida.
   final Map<String, int> sequence;
@@ -222,6 +247,22 @@ class RouteDetail {
   /// Paradas da rota otimizada, na ordem de entrega.
   List<Package> get stops =>
       orderedPackages.where((p) => sequence.containsKey(p.id)).toList();
+
+  /// Primeira parada ainda pendente — a "próxima entrega".
+  Package? get nextStop =>
+      stops.where((p) => p.status == 'pending').firstOrNull;
+
+  /// Tempo estimado para concluir as paradas restantes (da próxima até a última).
+  int? get remainingSeconds {
+    final next = nextStop;
+    if (next == null) return null;
+    final firstEta = etas[next.id];
+    final all = etas.values.whereType<DateTime>();
+    if (firstEta == null || all.isEmpty) return null;
+    final lastEta = all.reduce((a, b) => a.isAfter(b) ? a : b);
+    final s = lastEta.difference(firstEta).inSeconds;
+    return s < 0 ? 0 : s;
+  }
 
   bool get isOptimized =>
       optimization != null &&
