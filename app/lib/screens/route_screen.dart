@@ -7,6 +7,7 @@ import '../routing/route_builder.dart';
 import '../scanning/label_capture.dart';
 import '../theme.dart';
 import '../widgets/address_form.dart';
+import '../widgets/location_picker.dart';
 import '../widgets/status.dart';
 import 'map_screen.dart';
 import 'scanner_screen.dart';
@@ -266,6 +267,20 @@ class _RouteScreenState extends State<RouteScreen> {
     );
   }
 
+  /// Posição do pacote no veículo (organização na hora de achar a encomenda).
+  Future<void> _setLocation(Package pkg) async {
+    final picked = await showLocationPicker(
+      context,
+      current: pkg.vehicleLocation,
+    );
+    if (picked == null || picked == pkg.vehicleLocation) return;
+    await _action(() async {
+      await widget.api.updateLocation(pkg.id, picked.isEmpty ? null : picked);
+      pkg.vehicleLocation = picked.isEmpty ? null : picked;
+      return picked.isEmpty ? 'Local removido' : 'Local: $picked';
+    });
+  }
+
   Future<void> _packageMenu(Package pkg) async {
     final choice = await showModalBottomSheet<String>(
       context: context,
@@ -287,6 +302,15 @@ class _RouteScreenState extends State<RouteScreen> {
                     : 'Corrigir endereço',
               ),
               onTap: () => Navigator.pop(context, 'edit'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.inventory_2_outlined),
+              title: Text(
+                pkg.vehicleLocation == null
+                    ? 'Local no veículo'
+                    : 'Local: ${pkg.vehicleLocation}',
+              ),
+              onTap: () => Navigator.pop(context, 'locate'),
             ),
             const Divider(),
             ListTile(
@@ -317,6 +341,10 @@ class _RouteScreenState extends State<RouteScreen> {
     if (choice == 'delete') return _deletePackage(pkg);
     if (choice == 'photo' || choice == 'edit') {
       await _editAddress(pkg, fromPhoto: choice == 'photo');
+      return;
+    }
+    if (choice == 'locate') {
+      await _setLocation(pkg);
       return;
     }
     await _action(() async {
@@ -511,6 +539,15 @@ class _RouteScreenState extends State<RouteScreen> {
                       StatusChip(
                         label: packageStatusLabels[pkg.status] ?? pkg.status,
                         color: packageStatusColor(pkg.status),
+                      ),
+                      GestureDetector(
+                        onTap: () => _setLocation(pkg),
+                        child: StatusChip(
+                          label: pkg.vehicleLocation ?? 'Local no veículo',
+                          color: pkg.vehicleLocation == null
+                              ? Colors.grey.shade600
+                              : EntreggoColors.accent,
+                        ),
                       ),
                       if (pkg.addressText != null &&
                           pkg.addressStatus != 'ready')

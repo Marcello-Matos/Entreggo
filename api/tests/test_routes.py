@@ -129,6 +129,25 @@ def test_update_route_title(client, auth, other_auth, route_id):
     assert client.patch(url, json={"title": ""}, headers=auth).status_code == 422
 
 
+def test_vehicle_location(client, auth, other_auth, route_id):
+    pkg = client.post(f"/v1/routes/{route_id}/scan", json={"code": "L1"}, headers=auth).json()
+    url = f"/v1/packages/{pkg['id']}/location"
+    assert client.patch(url, json={"location": "X"}, headers=other_auth).status_code == 404
+
+    resp = client.patch(url, json={"location": "Fundo • Meio • Prateleira"}, headers=auth)
+    assert resp.status_code == 200
+    assert resp.json()["vehicle_location"] == "Fundo • Meio • Prateleira"
+    detail = client.get(f"/v1/routes/{route_id}", headers=auth).json()
+    assert detail["packages"][0]["vehicle_location"] == "Fundo • Meio • Prateleira"
+
+    assert client.patch(url, json={"location": " "}, headers=auth).json()[
+        "vehicle_location"
+    ] is None
+    assert (
+        client.patch(url, json={"location": "x" * 61}, headers=auth).status_code == 422
+    )
+
+
 def test_delete_package(client, auth, other_auth, route_id):
     pkg = client.post(f"/v1/routes/{route_id}/scan", json={"code": "D1"}, headers=auth).json()
     url = f"/v1/packages/{pkg['id']}"

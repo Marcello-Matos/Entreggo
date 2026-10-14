@@ -66,6 +66,7 @@ class PackageOut(ORMModel):
     recipient_name: str | None = None
     delivered_at: datetime | None = None
     has_proof_photo: bool = False
+    vehicle_location: str | None = None
 
 
 class StopOut(ORMModel):
@@ -109,6 +110,10 @@ class RouteDetail(RouteOut):
     packages: list[PackageOut]
     stops: list[StopOut]
     optimization: dict | None
+
+
+class LocationUpdate(BaseModel):
+    location: str | None = Field(default=None, max_length=60)
 
 
 class StatusUpdate(BaseModel):

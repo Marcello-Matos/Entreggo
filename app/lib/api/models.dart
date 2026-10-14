@@ -125,6 +125,7 @@ class Package {
     this.recipientName,
     this.deliveredAt,
     this.hasProofPhoto = false,
+    this.vehicleLocation,
   });
 
   factory Package.fromJson(Map<String, dynamic> j) => Package(
@@ -143,6 +144,7 @@ class Package {
     deliveredAt: DateTime.tryParse(j['delivered_at'] as String? ?? '')
         ?.toLocal(),
     hasProofPhoto: j['has_proof_photo'] as bool? ?? false,
+    vehicleLocation: j['vehicle_location'] as String?,
   );
 
   final String id;
@@ -164,6 +166,10 @@ class Package {
   final String? recipientName;
   final DateTime? deliveredAt;
   final bool hasProofPhoto;
+
+  /// Posição física no veículo ("Fundo • Meio • Prateleira").
+  /// Mutável: o app atualiza localmente após o PATCH de local.
+  String? vehicleLocation;
 
   bool get hasCoordinates => lat != null && lng != null;
 

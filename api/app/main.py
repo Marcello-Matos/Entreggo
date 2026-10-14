@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from sqlalchemy import text
 
 from app import models  # noqa: F401  (registra os modelos no metadata)
 from app.db import Base, engine
@@ -11,6 +12,15 @@ from app.routers import dashboard, import_jobs, packages, routes, subscription, 
 async def lifespan(_: FastAPI):
     # MVP: cria as tabelas na inicialização. Migre para Alembic antes de produção.
     Base.metadata.create_all(engine)
+    if engine.dialect.name == "postgresql":
+        # Colunas adicionadas depois do primeiro deploy (create_all não altera tabelas)
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    "ALTER TABLE packages "
+                    "ADD COLUMN IF NOT EXISTS vehicle_location VARCHAR(60)"
+                )
+            )
     yield
 
 

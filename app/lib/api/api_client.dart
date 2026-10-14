@@ -180,6 +180,13 @@ class ApiClient {
     },
   );
 
+  /// Posição do pacote no veículo (`null` remove o local).
+  Future<void> updateLocation(String packageId, String? location) => _send(
+    'PATCH',
+    '/v1/packages/$packageId/location',
+    body: {'location': location},
+  );
+
   /// Foto do pacote no local (comprovante de entrega/tentativa).
   Future<void> uploadDeliveryPhoto(
     String packageId,

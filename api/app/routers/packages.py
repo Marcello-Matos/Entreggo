@@ -16,7 +16,7 @@ from app.auth import get_current_user
 from app.db import get_db
 from app.deps import mark_route_changed
 from app.models import DeliveryEvent, DeliveryProof, Package, Route, RouteStop, User
-from app.schemas import PackageOut, PackageUpdate, StatusUpdate
+from app.schemas import LocationUpdate, PackageOut, PackageUpdate, StatusUpdate
 from app.services.images import detect_image_type
 
 MAX_PROOF_PHOTO_BYTES = 5 * 1024 * 1024
@@ -85,6 +85,20 @@ def update_status(
         "draft",
     ):
         route.status = "in_progress"
+    db.commit()
+    return pkg
+
+
+@router.patch("/{package_id}/location", response_model=PackageOut)
+def update_location(
+    package_id: uuid.UUID,
+    body: LocationUpdate,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Posição física do pacote no veículo (ex.: "Fundo • Meio • Prateleira")."""
+    pkg = _get_owned_package(db, package_id, user)
+    pkg.vehicle_location = (body.location or "").strip() or None
     db.commit()
     return pkg
 

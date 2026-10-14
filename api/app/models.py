@@ -89,6 +89,8 @@ class Package(TimestampMixin, Base):
     geocode_meta: Mapped[dict | None] = mapped_column(JSON)
     status: Mapped[str] = mapped_column(String(20), default="pending", index=True)
     scanned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Posição física no veículo ("Fundo • Meio • Prateleira") — v1.4+
+    vehicle_location: Mapped[str | None] = mapped_column(String(60))
 
     route: Mapped[Route] = relationship(back_populates="packages")
     proof: Mapped["DeliveryProof | None"] = relationship(

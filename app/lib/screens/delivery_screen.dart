@@ -6,6 +6,7 @@ import '../api/models.dart';
 import '../routing/location.dart';
 import '../routing/navigation.dart';
 import '../theme.dart';
+import '../widgets/location_picker.dart';
 import '../widgets/proof_sheet.dart';
 import '../widgets/status.dart';
 
@@ -76,6 +77,23 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
     }
   }
 
+  /// Posição do pacote no veículo — ajuda a achar a encomenda na parada.
+  Future<void> _setLocation(Package pkg) async {
+    final picked = await showLocationPicker(
+      context,
+      current: pkg.vehicleLocation,
+    );
+    if (picked == null || picked == pkg.vehicleLocation || !mounted) return;
+    try {
+      await widget.api.updateLocation(pkg.id, picked.isEmpty ? null : picked);
+      setState(() => pkg.vehicleLocation = picked.isEmpty ? null : picked);
+    } on ApiException catch (e) {
+      _toast(e.message);
+    } catch (e) {
+      _toast('Falha de conexão: $e');
+    }
+  }
+
   void _showList(RouteDetail detail) => showModalBottomSheet<void>(
     context: context,
     showDragHandle: true,
@@ -97,7 +115,12 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
                 ),
               ),
               title: Text(p.addressText ?? p.trackingCode ?? 'Pacote'),
-              subtitle: Text(packageStatusLabels[p.status] ?? p.status),
+              subtitle: Text(
+                [
+                  packageStatusLabels[p.status] ?? p.status,
+                  if (p.vehicleLocation != null) '📦 ${p.vehicleLocation}',
+                ].join(' • '),
+              ),
             ),
         ],
       ),
@@ -207,6 +230,59 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
                     ],
+                    const SizedBox(height: 12),
+                    InkWell(
+                      borderRadius: BorderRadius.circular(10),
+                      onTap: () => _setLocation(next),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
+                        decoration: BoxDecoration(
+                          color: next.vehicleLocation == null
+                              ? Theme.of(
+                                  context,
+                                ).colorScheme.surfaceContainerHighest
+                              : EntreggoColors.accent.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(10),
+                          border: next.vehicleLocation == null
+                              ? Border.all(
+                                  color: Theme.of(context).dividerColor,
+                                )
+                              : null,
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.local_shipping_outlined,
+                              size: 20,
+                              color: next.vehicleLocation == null
+                                  ? EntreggoColors.slate
+                                  : EntreggoColors.accent,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                next.vehicleLocation ??
+                                    'Onde está no veículo? Toque para definir',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  color: next.vehicleLocation == null
+                                      ? EntreggoColors.slate
+                                      : null,
+                                ),
+                              ),
+                            ),
+                            const Icon(
+                              Icons.edit_outlined,
+                              size: 16,
+                              color: EntreggoColors.slate,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),
