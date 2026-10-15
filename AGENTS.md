@@ -15,6 +15,10 @@ Monorepo: `api/` (Python 3.12 + FastAPI) e `app/` (Flutter). Idioma do produto e
 
 - `flutter pub get`, `flutter analyze`, `flutter test`, `dart format lib test`
 - Configuração via `--dart-define-from-file=env.json` (ver `env.example.json`).
+- **IMPORTANTE**: build/instalação no iPhone físico SEMPRE com
+  `flutter build ios --release --dart-define-from-file=env.prod.json`
+  (aponta para `https://entreggo-api.onrender.com`). Sem a flag o app usa
+  `localhost:8001` e falha com "Connection refused" no dispositivo.
 - Dependências: preferir versões publicadas há mais de 7 dias (`supabase_flutter` fixado em 2.18.0).
 
 ## Segredos
