@@ -66,7 +66,7 @@ O Entreggo não é destinado a menores de 18 anos.
 
 ## 9. Contato
 
-Dúvidas ou pedidos sobre dados pessoais: **[SEU E-MAIL AQUI]**
+Dúvidas ou pedidos sobre dados pessoais: **marcellomatosxads@gmail.com**
 
 ## 10. Alterações
 
