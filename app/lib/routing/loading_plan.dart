@@ -3,20 +3,30 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../api/models.dart';
 
-/// Layout do veículo: as zonas vão da mais funda (carregada primeiro,
-/// última entrega) até a mais próxima da porta (primeira entrega).
+/// Layout do veículo: `zones` vai da mais funda (carregada primeiro, última
+/// entrega) até a mais próxima da porta (primeira entrega). `diagramRows`
+/// posiciona as zonas no desenho, de cima (fundo) para baixo (porta).
 class VehicleType {
   const VehicleType({
     required this.id,
     required this.name,
     required this.icon,
     required this.zones,
+    required this.diagramRows,
+    required this.doorLabel,
   });
 
   final String id;
   final String name;
   final IconData icon;
   final List<String> zones;
+
+  /// Linhas do diagrama, do fundo (topo) até a porta (base).
+  /// Cada item é o nome de uma zona de `zones`.
+  final List<List<String>> diagramRows;
+
+  /// Nome da abertura de carga ("Porta-malas", "Porta traseira", "Baú").
+  final String doorLabel;
 }
 
 const vehicleTypes = [
@@ -24,12 +34,19 @@ const vehicleTypes = [
     id: 'moto',
     name: 'Moto (baú)',
     icon: Icons.two_wheeler,
+    doorLabel: 'Tampa do baú',
     zones: ['Baú — fundo', 'Baú — meio', 'Baú — entrada'],
+    diagramRows: [
+      ['Baú — fundo'],
+      ['Baú — meio'],
+      ['Baú — entrada'],
+    ],
   ),
   VehicleType(
     id: 'carro',
     name: 'Carro',
     icon: Icons.directions_car_outlined,
+    doorLabel: 'Porta-malas',
     zones: [
       'Porta-malas fundo esquerdo',
       'Porta-malas fundo direito',
@@ -38,11 +55,18 @@ const vehicleTypes = [
       'Banco traseiro',
       'Banco passageiro',
     ],
+    diagramRows: [
+      ['Porta-malas fundo esquerdo', 'Porta-malas fundo direito'],
+      ['Porta-malas entrada esquerda', 'Porta-malas entrada direita'],
+      ['Banco traseiro'],
+      ['Banco passageiro'],
+    ],
   ),
   VehicleType(
     id: 'fiorino',
     name: 'Fiorino / van pequena',
     icon: Icons.airport_shuttle_outlined,
+    doorLabel: 'Porta traseira',
     zones: [
       'Fundo esquerdo',
       'Fundo direito',
@@ -52,11 +76,17 @@ const vehicleTypes = [
       'Porta esquerda',
       'Porta direita',
     ],
+    diagramRows: [
+      ['Fundo esquerdo', 'Fundo centro', 'Fundo direito'],
+      ['Meio esquerdo', 'Meio direito'],
+      ['Porta esquerda', 'Porta direita'],
+    ],
   ),
   VehicleType(
     id: 'van',
     name: 'Van grande',
     icon: Icons.local_shipping_outlined,
+    doorLabel: 'Porta traseira',
     zones: [
       'Fundo esquerdo',
       'Fundo direito',
@@ -68,21 +98,32 @@ const vehicleTypes = [
       'Porta direita',
       'Porta centro',
     ],
+    diagramRows: [
+      ['Fundo esquerdo', 'Fundo centro', 'Fundo direito'],
+      ['Meio esquerdo', 'Meio centro', 'Meio direito'],
+      ['Porta esquerda', 'Porta centro', 'Porta direita'],
+    ],
   ),
 ];
 
-const _prefKey = 'vehicle_type';
+const _vehicleIdKey = 'vehicle_type';
+const _vehicleModelKey = 'vehicle_model';
 
 Future<String?> savedVehicleId() async =>
-    (await SharedPreferences.getInstance()).getString(_prefKey);
+    (await SharedPreferences.getInstance()).getString(_vehicleIdKey);
 
-Future<void> saveVehicleId(String id) async =>
-    (await SharedPreferences.getInstance()).setString(_prefKey, id);
+Future<String?> savedVehicleModel() async =>
+    (await SharedPreferences.getInstance()).getString(_vehicleModelKey);
+
+Future<void> saveVehicle(String id, String model) async {
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.setString(_vehicleIdKey, id);
+  await prefs.setString(_vehicleModelKey, model);
+}
 
 /// Sugestão de carga: retorna {zona: [paradas na ordem de entrega]}.
 /// A ÚLTIMA parada vai para a zona mais funda (carregada primeiro);
 /// a PRIMEIRA fica na zona mais acessível, junto à porta.
-/// As zonas são preenchidas uniformemente e na ordem fundo → porta.
 Map<String, List<Package>> loadingPlan(
   List<Package> stops,
   VehicleType vehicle,

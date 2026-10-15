@@ -9,6 +9,7 @@ import '../theme.dart';
 import '../widgets/address_form.dart';
 import '../widgets/location_picker.dart';
 import '../widgets/status.dart';
+import '../widgets/vehicle_picker.dart';
 import 'loading_plan_screen.dart';
 import 'map_screen.dart';
 import 'scanner_screen.dart';
@@ -114,6 +115,7 @@ class _RouteScreenState extends State<RouteScreen> {
           'Duplicados: ${summary['duplicates']}'
           '${errors > 0 ? ' • Erros: $errors' : ''}';
     });
+    if (mounted) await showVehiclePicker(context);
   }
 
   Future<void> _addManual() async {
