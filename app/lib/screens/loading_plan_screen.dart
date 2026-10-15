@@ -62,88 +62,89 @@ class _LoadingPlanScreenState extends State<LoadingPlanScreen> {
     final order = planZoneOrder(plan, _vehicle);
     return Scaffold(
       appBar: AppBar(title: const Text('Plano de carga')),
-      body: stops.isEmpty
-          ? const Center(
-              child: Padding(
-                padding: EdgeInsets.all(24),
-                child: Text(
-                  'Monte a rota primeiro para gerar o plano de carga.',
-                  textAlign: TextAlign.center,
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Text(
+            'Qual veículo você está usando?',
+            style: Theme.of(context).textTheme.titleSmall,
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: _modelCtrl,
+            textCapitalization: TextCapitalization.words,
+            decoration: const InputDecoration(
+              labelText: 'Nome/modelo do veículo',
+              hintText: 'Ex.: Peugeot 208',
+              prefixIcon: Icon(Icons.directions_car_filled_outlined),
+              isDense: true,
+              border: OutlineInputBorder(),
+            ),
+            onChanged: (v) {
+              saveVehicle(_vehicle.id, v.trim());
+              setState(() {});
+            },
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final v in vehicleTypes)
+                ChoiceChip(
+                  avatar: Icon(v.icon, size: 18),
+                  label: Text(v.name),
+                  selected: _vehicle == v,
+                  onSelected: (_) => _select(v),
                 ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          if (stops.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 48),
+              child: Text(
+                'Monte a rota para ver onde colocar cada pacote.',
+                textAlign: TextAlign.center,
               ),
             )
-          : ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                Text(
-                  'Qual veículo você está usando?',
-                  style: Theme.of(context).textTheme.titleSmall,
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: _modelCtrl,
-                  textCapitalization: TextCapitalization.words,
-                  decoration: const InputDecoration(
-                    hintText: 'Ex.: Peugeot 208',
-                    prefixIcon: Icon(Icons.directions_car_filled_outlined),
-                    isDense: true,
-                    border: OutlineInputBorder(),
-                  ),
-                  onChanged: (v) => saveVehicle(_vehicle.id, v.trim()),
-                ),
-                const SizedBox(height: 10),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
+          else ...[
+            _VehicleDiagram(
+              vehicle: _vehicle,
+              model: _modelCtrl.text.trim(),
+              plan: plan,
+              sequence: widget.detail.sequence,
+            ),
+            const SizedBox(height: 12),
+            Card(
+              color: EntreggoColors.accent.withValues(alpha: 0.1),
+              child: const Padding(
+                padding: EdgeInsets.all(12),
+                child: Row(
                   children: [
-                    for (final v in vehicleTypes)
-                      ChoiceChip(
-                        avatar: Icon(v.icon, size: 18),
-                        label: Text(v.name),
-                        selected: _vehicle == v,
-                        onSelected: (_) => _select(v),
+                    Icon(Icons.lightbulb_outline, color: EntreggoColors.accent),
+                    SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Carregue de cima para baixo no desenho: a '
+                        'última entrega vai no fundo, a primeira fica '
+                        'junto à porta.',
                       ),
+                    ),
                   ],
                 ),
-                const SizedBox(height: 16),
-                _VehicleDiagram(
-                  vehicle: _vehicle,
-                  model: _modelCtrl.text.trim(),
-                  plan: plan,
-                  sequence: widget.detail.sequence,
-                ),
-                const SizedBox(height: 12),
-                Card(
-                  color: EntreggoColors.accent.withValues(alpha: 0.1),
-                  child: const Padding(
-                    padding: EdgeInsets.all(12),
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.lightbulb_outline,
-                          color: EntreggoColors.accent,
-                        ),
-                        SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            'Carregue de cima para baixo no desenho: a '
-                            'última entrega vai no fundo, a primeira fica '
-                            'junto à porta.',
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                for (final zone in order)
-                  _ZoneCard(
-                    zone: zone,
-                    packages: plan[zone]!,
-                    sequence: widget.detail.sequence,
-                  ),
-              ],
+              ),
             ),
+            const SizedBox(height: 12),
+            for (final zone in order)
+              _ZoneCard(
+                zone: zone,
+                packages: plan[zone]!,
+                sequence: widget.detail.sequence,
+              ),
+          ],
+        ],
+      ),
       bottomNavigationBar: stops.isEmpty
           ? null
           : SafeArea(

@@ -405,14 +405,13 @@ class _RouteScreenState extends State<RouteScreen> {
                       title: Text('Adicionar manualmente'),
                     ),
                   ),
-                  if (detail?.isOptimized ?? false)
-                    const PopupMenuItem(
-                      value: 'loadplan',
-                      child: ListTile(
-                        leading: Icon(Icons.local_shipping_outlined),
-                        title: Text('Plano de carga'),
-                      ),
+                  const PopupMenuItem(
+                    value: 'loadplan',
+                    child: ListTile(
+                      leading: Icon(Icons.local_shipping_outlined),
+                      title: Text('Plano de carga'),
                     ),
+                  ),
                   const PopupMenuItem(
                     value: 'rename',
                     child: ListTile(
@@ -499,25 +498,24 @@ class _RouteScreenState extends State<RouteScreen> {
                 ),
               ),
             ),
-          if (detail.isOptimized)
-            Card(
-              color: EntreggoColors.accent.withValues(alpha: 0.08),
-              child: ListTile(
-                leading: const Icon(
-                  Icons.local_shipping_outlined,
-                  color: EntreggoColors.accent,
-                ),
-                title: const Text(
-                  'Plano de carga do veículo',
-                  style: TextStyle(fontWeight: FontWeight.w700),
-                ),
-                subtitle: const Text(
-                  'Onde colocar cada pacote para achar fácil na parada',
-                ),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => _openLoadingPlan(detail),
+          Card(
+            color: EntreggoColors.accent.withValues(alpha: 0.08),
+            child: ListTile(
+              leading: const Icon(
+                Icons.local_shipping_outlined,
+                color: EntreggoColors.accent,
               ),
+              title: const Text(
+                'Plano de carga do veículo',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
+              subtitle: const Text(
+                'Onde colocar cada pacote para achar fácil na parada',
+              ),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => _openLoadingPlan(detail),
             ),
+          ),
           if (packages.isEmpty)
             const Padding(
               padding: EdgeInsets.only(top: 48),
