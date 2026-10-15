@@ -1,0 +1,17 @@
+name: Keep API awake
+
+# O plano gratuito do Render hiberna após ~15 min sem tráfego e o primeiro
+# acesso depois disso leva ~40s. Este ping a cada 5 min mantém a API acordada.
+# Roda na nuvem do GitHub — funciona mesmo com o Mac desligado.
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping health endpoint
+        run: curl -fsS -m 30 https://entreggo-api.onrender.com/health
