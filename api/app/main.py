@@ -1,6 +1,8 @@
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.responses import HTMLResponse
 from sqlalchemy import text
 
 from app import models  # noqa: F401  (registra os modelos no metadata)
@@ -43,3 +45,9 @@ for r in (
 @app.get("/health", tags=["health"])
 def health():
     return {"status": "ok"}
+
+
+# Política de privacidade pública (exigida pela Google Play e pela App Store).
+@app.get("/privacy", response_class=HTMLResponse, include_in_schema=False)
+def privacy():
+    return (Path(__file__).parent / "privacy.html").read_text(encoding="utf-8")
