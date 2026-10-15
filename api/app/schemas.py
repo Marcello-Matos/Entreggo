@@ -187,3 +187,8 @@ class SubscriptionOut(BaseModel):
     expires_at: datetime | None
     source: str
     limits: dict[str, int]
+
+
+class PlayPurchaseIn(BaseModel):
+    product_id: str = Field(min_length=1, max_length=120)
+    purchase_token: str = Field(min_length=1, max_length=512)

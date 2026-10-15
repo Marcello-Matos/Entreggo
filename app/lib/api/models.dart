@@ -283,3 +283,45 @@ class RouteDetail {
   int get missingAddress =>
       packages.where((p) => p.addressStatus != 'ready').length;
 }
+
+/// Assinatura do usuário (trial, Google Play ou plano gratuito).
+class Subscription {
+  const Subscription({
+    required this.entitlement,
+    required this.source,
+    this.productId,
+    this.expiresAt,
+    this.limits = const {},
+  });
+
+  factory Subscription.fromJson(Map<String, dynamic> j) => Subscription(
+    entitlement: j['entitlement'] as String,
+    source: j['source'] as String? ?? 'default',
+    productId: j['product_id'] as String?,
+    expiresAt: j['expires_at'] != null
+        ? DateTime.tryParse(j['expires_at'] as String)
+        : null,
+    limits: {
+      for (final e in (j['limits'] as Map?)?.entries ?? const Iterable.empty())
+        e.key.toString(): (e.value as num).toInt(),
+    },
+  );
+
+  final String entitlement; // free | pro | team
+  final String source; // trial | play | default
+  final String? productId;
+  final DateTime? expiresAt;
+  final Map<String, int> limits;
+
+  bool get isPro => entitlement != 'free';
+  bool get isTrial => source == 'trial' && isPro;
+  bool get trialExpired => source == 'trial' && !isPro;
+
+  /// Dias restantes do trial (0 quando expirado).
+  int get trialDaysLeft {
+    final exp = expiresAt;
+    if (exp == null) return 0;
+    final d = exp.difference(DateTime.now()).inDays;
+    return d < 0 ? 0 : d;
+  }
+}

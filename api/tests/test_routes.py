@@ -107,17 +107,41 @@ def test_start_address_is_geocoded_on_optimize(client, auth):
     assert route["start_address"] == "Praça da Sé"
 
 
-def test_free_plan_package_limit(client, auth, route_id):
+def test_free_plan_package_limit(client, auth, route_id, db_session):
+    # Expira o trial para cair nos limites do plano gratuito.
+    from datetime import UTC, datetime, timedelta
+
+    from app.models import Subscription
+
+    sub = db_session.query(Subscription).first()
+    sub.expires_at = datetime.now(UTC) - timedelta(days=1)
+    db_session.commit()
+
     for i in range(30):
         client.post(f"/v1/routes/{route_id}/scan", json={"code": f"C{i}"}, headers=auth)
     resp = client.post(f"/v1/routes/{route_id}/scan", json={"code": "extra"}, headers=auth)
     assert resp.status_code == 403
 
 
-def test_default_subscription_is_free(client, auth):
+def test_new_user_subscription_is_trial(client, auth):
     sub = client.get("/v1/subscription", headers=auth).json()
-    assert sub["entitlement"] == "free"
-    assert sub["limits"]["max_packages_per_route"] == 30
+    assert sub["entitlement"] == "pro"
+    assert sub["source"] == "trial"
+    assert sub["limits"]["max_packages_per_route"] == 300
+
+
+def test_expired_trial_falls_back_to_free(client, auth, route_id, db_session):
+    from datetime import UTC, datetime, timedelta
+
+    from app.models import Subscription
+
+    sub = db_session.query(Subscription).first()
+    sub.expires_at = datetime.now(UTC) - timedelta(days=1)
+    db_session.commit()
+
+    body = client.get("/v1/subscription", headers=auth).json()
+    assert body["entitlement"] == "free"
+    assert body["source"] == "trial"
 
 
 def test_update_route_title(client, auth, other_auth, route_id):

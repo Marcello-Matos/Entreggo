@@ -4,9 +4,11 @@ import 'package:geolocator/geolocator.dart';
 import '../api/api_client.dart';
 import '../api/models.dart';
 import '../auth/auth_service.dart';
+import '../billing/billing_service.dart';
 import '../routing/location.dart';
 import '../theme.dart';
 import '../widgets/logo.dart';
+import '../widgets/paywall_sheet.dart';
 import '../widgets/profile_avatar.dart';
 import 'history_screen.dart';
 import 'map_screen.dart';
@@ -33,9 +35,26 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   late Future<Dashboard> _dashboard = widget.api.dashboard();
+  late Future<Subscription> _subscription = widget.api.subscription();
+  late final BillingService _billing = BillingService(widget.api);
   bool _busy = false;
 
-  void _reload() => setState(() => _dashboard = widget.api.dashboard());
+  @override
+  void initState() {
+    super.initState();
+    _billing.init();
+  }
+
+  @override
+  void dispose() {
+    _billing.dispose();
+    super.dispose();
+  }
+
+  void _reload() => setState(() {
+    _dashboard = widget.api.dashboard();
+    _subscription = widget.api.subscription();
+  });
 
   void _toast(String message) =>
       ScaffoldMessenger.of(context)
@@ -128,6 +147,22 @@ class _HomeScreenState extends State<HomeScreen> {
                         ],
                       ),
                     ),
+                  ),
+                  FutureBuilder<Subscription>(
+                    future: _subscription,
+                    builder: (context, s) {
+                      final sub = s.data;
+                      if (sub == null || sub.source == 'play') {
+                        return const SizedBox.shrink();
+                      }
+                      return _PlanBanner(
+                        sub: sub,
+                        onTap: () async {
+                          await showPaywall(context, _billing);
+                          _reload();
+                        },
+                      );
+                    },
                   ),
                   if (hasActive) ...[
                     const SizedBox(height: 12),
@@ -651,4 +686,40 @@ class _ErrorBox extends StatelessWidget {
       TextButton(onPressed: onRetry, child: const Text('Tentar novamente')),
     ],
   );
+}
+
+/// Banner de assinatura: dias de trial restantes ou aviso de teste expirado.
+class _PlanBanner extends StatelessWidget {
+  const _PlanBanner({required this.sub, required this.onTap});
+
+  final Subscription sub;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final expired = sub.trialExpired;
+    final (icon, color, title, subtitle) = expired
+        ? (
+            Icons.lock_clock,
+            Colors.orange.shade800,
+            'Seu período de teste acabou',
+            'Assine o Pro para continuar com rotas grandes',
+          )
+        : (
+            Icons.workspace_premium_outlined,
+            EntreggoColors.accent,
+            'Teste Pro: ${sub.trialDaysLeft} ${sub.trialDaysLeft == 1 ? 'dia restante' : 'dias restantes'}',
+            'Depois, R\$ 29,90/mês pela Google Play',
+          );
+    return Card(
+      color: color.withValues(alpha: 0.1),
+      child: ListTile(
+        leading: Icon(icon, color: color),
+        title: Text(title, style: TextStyle(fontWeight: FontWeight.w700)),
+        subtitle: Text(subtitle),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: onTap,
+      ),
+    );
+  }
 }

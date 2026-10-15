@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.config import Settings, get_settings
 from app.db import get_db
-from app.models import User
+from app.models import Subscription, User
 
 bearer = HTTPBearer(auto_error=False)
 
@@ -72,6 +72,16 @@ def get_current_user(
         if user is None:
             user = User(id=claims["sub"], email=claims.get("email"))
             db.add(user)
+            # Todo usuário novo ganha 7 dias de Pro grátis (trial).
+            db.add(
+                Subscription(
+                    user_id=user.id,
+                    product_id="trial_7d",
+                    entitlement="pro",
+                    expires_at=datetime.now(UTC) + timedelta(days=7),
+                    source="trial",
+                )
+            )
             db.commit()
         _user_cache[user.id] = (datetime.now(UTC) + _USER_CACHE_TTL, user)
     if user.status != "active":

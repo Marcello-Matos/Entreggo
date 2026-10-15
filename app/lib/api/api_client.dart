@@ -69,6 +69,23 @@ class ApiClient {
     );
   }
 
+  /// Estado da assinatura (trial, Play ou gratuito).
+  Future<Subscription> subscription() async => Subscription.fromJson(
+    await _send('GET', '/v1/subscription') as Map<String, dynamic>,
+  );
+
+  /// Registra o purchase token do Google Play e libera o Pro.
+  Future<Subscription> registerPlayPurchase(
+    String productId,
+    String purchaseToken,
+  ) async => Subscription.fromJson(
+    await _send(
+      'POST',
+      '/v1/subscription/play',
+      body: {'product_id': productId, 'purchase_token': purchaseToken},
+    ) as Map<String, dynamic>,
+  );
+
   Future<List<DeliveryRoute>> listRoutes() async => [
     for (final r in await _send('GET', '/v1/routes') as List)
       DeliveryRoute.fromJson(r as Map<String, dynamic>),
