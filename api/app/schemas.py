@@ -192,3 +192,18 @@ class SubscriptionOut(BaseModel):
 class PlayPurchaseIn(BaseModel):
     product_id: str = Field(min_length=1, max_length=120)
     purchase_token: str = Field(min_length=1, max_length=512)
+
+
+class WeeklyDay(BaseModel):
+    date: str
+    delivered: int
+    failed: int
+    skipped: int
+
+
+class WeeklyOut(BaseModel):
+    days: list[WeeklyDay]
+    delivered: int
+    failed: int
+    skipped: int
+    success_rate: float

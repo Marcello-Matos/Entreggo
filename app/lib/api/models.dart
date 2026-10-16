@@ -325,3 +325,39 @@ class Subscription {
     return d < 0 ? 0 : d;
   }
 }
+
+/// Entregas por dia dos últimos 7 dias.
+class WeeklyStats {
+  const WeeklyStats({
+    required this.days,
+    required this.delivered,
+    required this.failed,
+    required this.skipped,
+    required this.successRate,
+  });
+
+  factory WeeklyStats.fromJson(Map<String, dynamic> j) => WeeklyStats(
+    days: [
+      for (final d in j['days'] as List)
+        (
+          date: DateTime.parse(d['date'] as String),
+          delivered: d['delivered'] as int,
+          failed: d['failed'] as int,
+          skipped: d['skipped'] as int,
+        ),
+    ],
+    delivered: j['delivered'] as int,
+    failed: j['failed'] as int,
+    skipped: j['skipped'] as int,
+    successRate: (j['success_rate'] as num).toDouble(),
+  );
+
+  /// (date, delivered, failed, skipped) para cada um dos 7 dias.
+  final List<({DateTime date, int delivered, int failed, int skipped})> days;
+  final int delivered;
+  final int failed;
+  final int skipped;
+  final double successRate;
+
+  int get total => delivered + failed + skipped;
+}

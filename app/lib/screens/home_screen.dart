@@ -1,3 +1,4 @@
+import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 
@@ -36,6 +37,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   late Future<Dashboard> _dashboard = widget.api.dashboard();
   late Future<Subscription> _subscription = widget.api.subscription();
+  late Future<WeeklyStats> _weekly = widget.api.weekly();
   late final BillingService _billing = BillingService(widget.api);
   bool _busy = false;
 
@@ -54,6 +56,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void _reload() => setState(() {
     _dashboard = widget.api.dashboard();
     _subscription = widget.api.subscription();
+    _weekly = widget.api.weekly();
   });
 
   void _toast(String message) =>
@@ -225,6 +228,13 @@ class _HomeScreenState extends State<HomeScreen> {
                       label: const Text('Escanear pacotes'),
                     ),
                   ],
+                  const SizedBox(height: 14),
+                  FutureBuilder<WeeklyStats>(
+                    future: _weekly,
+                    builder: (context, s) => s.hasData
+                        ? _WeeklyCard(stats: s.data!)
+                        : const SizedBox.shrink(),
+                  ),
                   const SizedBox(height: 14),
                   DecoratedBox(
                     decoration: BoxDecoration(
@@ -722,4 +732,180 @@ class _PlanBanner extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Gráfico dos últimos 7 dias: barras empilhadas (entregue/falha/pulado)
+/// e taxa de sucesso do período.
+class _WeeklyCard extends StatelessWidget {
+  const _WeeklyCard({required this.stats});
+
+  final WeeklyStats stats;
+
+  static const _weekday = ['seg', 'ter', 'qua', 'qui', 'sex', 'sáb', 'dom'];
+
+  @override
+  Widget build(BuildContext context) {
+    final maxY = stats.days
+        .map((d) => d.delivered + d.failed + d.skipped)
+        .fold(0, (a, b) => a > b ? a : b)
+        .toDouble();
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                const Icon(
+                  Icons.insights_outlined,
+                  size: 20,
+                  color: EntreggoColors.primary,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Últimos 7 dias',
+                    style: Theme.of(context).textTheme.titleMedium
+                        ?.copyWith(fontWeight: FontWeight.w700),
+                  ),
+                ),
+                if (stats.total > 0)
+                  Text(
+                    '${(stats.successRate * 100).round()}% de sucesso',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF16A34A),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            stats.total == 0
+                ? const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 12),
+                    child: Text(
+                      'Sem entregas registradas nos últimos 7 dias.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: EntreggoColors.slate),
+                    ),
+                  )
+                : SizedBox(
+                    height: 110,
+                    child: BarChart(
+                      BarChartData(
+                        maxY: maxY * 1.15,
+                        gridData: const FlGridData(show: false),
+                        borderData: FlBorderData(show: false),
+                        barTouchData: BarTouchData(enabled: false),
+                        titlesData: FlTitlesData(
+                          topTitles: const AxisTitles(),
+                          leftTitles: const AxisTitles(),
+                          rightTitles: const AxisTitles(),
+                          bottomTitles: AxisTitles(
+                            sideTitles: SideTitles(
+                              showTitles: true,
+                              reservedSize: 22,
+                              getTitlesWidget: (v, _) => Padding(
+                                padding: const EdgeInsets.only(top: 4),
+                                child: Text(
+                                  _weekday[stats.days[v.toInt()].date.weekday -
+                                      1],
+                                  style: const TextStyle(
+                                    fontSize: 10,
+                                    color: EntreggoColors.slate,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        barGroups: [
+                          for (var i = 0; i < stats.days.length; i++)
+                            BarChartGroupData(
+                              x: i,
+                              barRods: [
+                                BarChartRodData(
+                                  toY:
+                                      (stats.days[i].delivered +
+                                              stats.days[i].failed +
+                                              stats.days[i].skipped)
+                                          .toDouble(),
+                                  width: 16,
+                                  borderRadius: const BorderRadius.vertical(
+                                    top: Radius.circular(4),
+                                  ),
+                                  rodStackItems: [
+                                    BarChartRodStackItem(
+                                      0,
+                                      stats.days[i].delivered.toDouble(),
+                                      const Color(0xFF16A34A),
+                                    ),
+                                    BarChartRodStackItem(
+                                      stats.days[i].delivered.toDouble(),
+                                      (stats.days[i].delivered +
+                                              stats.days[i].failed)
+                                          .toDouble(),
+                                      Colors.orange,
+                                    ),
+                                    BarChartRodStackItem(
+                                      (stats.days[i].delivered +
+                                              stats.days[i].failed)
+                                          .toDouble(),
+                                      (stats.days[i].delivered +
+                                              stats.days[i].failed +
+                                              stats.days[i].skipped)
+                                          .toDouble(),
+                                      EntreggoColors.slate,
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+            if (stats.total > 0) ...[
+              const SizedBox(height: 8),
+              const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  _LegendDot(Color(0xFF16A34A), 'entregue'),
+                  SizedBox(width: 12),
+                  _LegendDot(Colors.orange, 'falha'),
+                  SizedBox(width: 12),
+                  _LegendDot(EntreggoColors.slate, 'pulado'),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _LegendDot extends StatelessWidget {
+  const _LegendDot(this.color, this.label);
+
+  final Color color;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Container(
+        width: 8,
+        height: 8,
+        decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+      ),
+      const SizedBox(width: 4),
+      Text(
+        label,
+        style: const TextStyle(fontSize: 11, color: EntreggoColors.slate),
+      ),
+    ],
+  );
 }

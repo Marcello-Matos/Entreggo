@@ -24,9 +24,7 @@ def get_subscription(user: User = Depends(get_current_user), db: Session = Depen
     sub = active_subscription(db, user)
     entitlement, limits = plan_limits(db, user)
     trial = db.scalar(
-        select(Subscription).where(
-            Subscription.user_id == user.id, Subscription.source == "trial"
-        )
+        select(Subscription).where(Subscription.user_id == user.id, Subscription.source == "trial")
     )
     return SubscriptionOut(
         entitlement=entitlement,

@@ -31,3 +31,23 @@ def test_play_purchase_rejects_unknown_product(client, auth):
         headers=auth,
     )
     assert resp.status_code == 400
+
+
+def test_weekly_dashboard(client, auth, route_id):
+    pkg = client.post(
+        f"/v1/routes/{route_id}/scan",
+        json={"code": "W1", "lat": -23.55, "lng": -46.63},
+        headers=auth,
+    ).json()
+    client.patch(
+        f"/v1/packages/{pkg['id']}/status",
+        json={"status": "delivered"},
+        headers=auth,
+    )
+    resp = client.get("/v1/dashboard/weekly", headers=auth)
+    assert resp.status_code == 200
+    body = resp.json()
+    assert len(body["days"]) == 7
+    assert body["delivered"] == 1
+    assert body["success_rate"] == 1.0
+    assert body["days"][-1]["delivered"] == 1

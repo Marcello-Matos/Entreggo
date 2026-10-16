@@ -7,8 +7,8 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.auth import get_current_user
 from app.db import get_db
-from app.models import Package, Route, User
-from app.schemas import ActiveRoute, DashboardOut
+from app.models import DeliveryEvent, Package, Route, User
+from app.schemas import ActiveRoute, DashboardOut, WeeklyDay, WeeklyOut
 
 router = APIRouter(prefix="/v1/dashboard", tags=["dashboard"])
 
@@ -75,4 +75,50 @@ def dashboard(
         )
         if active
         else None,
+    )
+
+
+@router.get("/weekly", response_model=WeeklyOut)
+def weekly(
+    tz_offset_minutes: int = Query(
+        default=-180, description="Fuso do aparelho em minutos (UTC-3 = -180)"
+    ),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Entregas por dia dos últimos 7 dias, no fuso do aparelho."""
+    offset = timedelta(minutes=tz_offset_minutes)
+    today = (datetime.now(UTC) + offset).date()
+    start = datetime.combine(today - timedelta(days=6), datetime.min.time()) - offset
+    events = db.scalars(
+        select(DeliveryEvent)
+        .join(Package, DeliveryEvent.package_id == Package.id)
+        .join(Route, Package.route_id == Route.id)
+        .where(Route.user_id == user.id, DeliveryEvent.timestamp >= start)
+    ).all()
+    counts: dict[str, Counter] = {}
+    for ev in events:
+        if not ev.event_type.startswith("status:"):
+            continue
+        day = (ev.timestamp + offset).date().isoformat()
+        counts.setdefault(day, Counter())[ev.event_type.removeprefix("status:")] += 1
+    days = [
+        WeeklyDay(
+            date=(today - timedelta(days=i)).isoformat(),
+            delivered=counts.get((today - timedelta(days=i)).isoformat(), Counter())["delivered"],
+            failed=counts.get((today - timedelta(days=i)).isoformat(), Counter())["failed_attempt"],
+            skipped=counts.get((today - timedelta(days=i)).isoformat(), Counter())["skipped"],
+        )
+        for i in range(6, -1, -1)
+    ]
+    delivered = sum(d.delivered for d in days)
+    failed = sum(d.failed for d in days)
+    skipped = sum(d.skipped for d in days)
+    total = delivered + failed + skipped
+    return WeeklyOut(
+        days=days,
+        delivered=delivered,
+        failed=failed,
+        skipped=skipped,
+        success_rate=round(delivered / total, 4) if total else 0.0,
     )

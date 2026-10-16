@@ -69,6 +69,15 @@ class ApiClient {
     );
   }
 
+  /// Entregas por dia dos últimos 7 dias (gráfico da home).
+  Future<WeeklyStats> weekly() async {
+    final offset = DateTime.now().timeZoneOffset.inMinutes;
+    return WeeklyStats.fromJson(
+      await _send('GET', '/v1/dashboard/weekly?tz_offset_minutes=$offset')
+          as Map<String, dynamic>,
+    );
+  }
+
   /// Estado da assinatura (trial, Play ou gratuito).
   Future<Subscription> subscription() async => Subscription.fromJson(
     await _send('GET', '/v1/subscription') as Map<String, dynamic>,
