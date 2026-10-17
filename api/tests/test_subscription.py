@@ -33,6 +33,23 @@ def test_play_purchase_rejects_unknown_product(client, auth):
     assert resp.status_code == 400
 
 
+def test_pro_email_gets_lifetime_pro(client, auth, monkeypatch):
+    """E-mail na lista PRO_EMAILS recebe Pro sem trial nem compra."""
+    from app.config import get_settings
+
+    monkeypatch.setenv("PRO_EMAILS", "a@entreggo.app")
+    get_settings.cache_clear()
+    try:
+        resp = client.get("/v1/subscription", headers=auth)
+    finally:
+        get_settings.cache_clear()
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["entitlement"] == "pro"
+    assert body["source"] == "owner"
+    assert body["expires_at"] is None
+
+
 def test_weekly_dashboard(client, auth, route_id):
     pkg = client.post(
         f"/v1/routes/{route_id}/scan",

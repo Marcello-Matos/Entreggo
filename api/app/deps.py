@@ -5,6 +5,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
+from app.config import get_settings
 from app.models import Package, Route, Subscription, User
 
 PLAN_LIMITS = {
@@ -38,7 +39,15 @@ def active_subscription(db: Session, user: User) -> Subscription | None:
     return sub if expires is None or expires > datetime.now(UTC) else None
 
 
+def is_pro_email(user: User) -> bool:
+    """E-mails em PRO_EMAILS têm Pro vitalício (dono do app, equipe interna)."""
+    emails = {e.strip().lower() for e in get_settings().pro_emails.split(",") if e.strip()}
+    return bool(user.email) and user.email.lower() in emails
+
+
 def plan_limits(db: Session, user: User) -> tuple[str, dict[str, int]]:
+    if is_pro_email(user):
+        return "pro", PLAN_LIMITS["pro"]
     sub = active_subscription(db, user)
     entitlement = sub.entitlement if sub and sub.entitlement in PLAN_LIMITS else "free"
     return entitlement, PLAN_LIMITS[entitlement]

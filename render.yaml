@@ -14,3 +14,5 @@ services:
         value: entreggo-cfef5
       - key: NOMINATIM_CONTACT
         sync: false
+      - key: PRO_EMAILS
+        value: marcellomatosxads@gmail.com

@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     max_import_rows: int = 2_000
     optimizer_time_limit_s: int = 5
     average_speed_kmh: float = 25.0
+    pro_emails: str = ""
 
 
 @lru_cache

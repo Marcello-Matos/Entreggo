@@ -155,7 +155,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     future: _subscription,
                     builder: (context, s) {
                       final sub = s.data;
-                      if (sub == null || sub.source == 'play') {
+                      if (sub == null || (sub.isPro && !sub.isTrial)) {
                         return const SizedBox.shrink();
                       }
                       return _PlanBanner(

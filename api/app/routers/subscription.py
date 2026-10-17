@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.auth import get_current_user
 from app.db import get_db
-from app.deps import active_subscription, plan_limits
+from app.deps import PLAN_LIMITS, active_subscription, is_pro_email, plan_limits
 from app.models import Subscription, User
 from app.schemas import PlayPurchaseIn, SubscriptionOut
 
@@ -21,6 +21,14 @@ PLAY_GRACE_DAYS = 33
 
 @router.get("", response_model=SubscriptionOut)
 def get_subscription(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    if is_pro_email(user):
+        return SubscriptionOut(
+            entitlement="pro",
+            source="owner",
+            product_id=None,
+            expires_at=None,
+            limits=PLAN_LIMITS["pro"],
+        )
     sub = active_subscription(db, user)
     entitlement, limits = plan_limits(db, user)
     trial = db.scalar(
