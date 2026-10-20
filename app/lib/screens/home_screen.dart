@@ -45,10 +45,12 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _billing.init();
+    _billing.purchases.addListener(_reload);
   }
 
   @override
   void dispose() {
+    _billing.purchases.removeListener(_reload);
     _billing.dispose();
     super.dispose();
   }
@@ -99,8 +101,23 @@ class _HomeScreenState extends State<HomeScreen> {
         : RouteScreen(api: widget.api, routeId: dash.activeRouteId!),
   );
 
+  /// Sem assinatura ativa, o app exige iniciar o teste grátis da Play.
+  /// Se a consulta falhar (sem rede), não bloqueia o motorista na rua.
   @override
   Widget build(BuildContext context) {
+    return FutureBuilder<Subscription>(
+      future: _subscription,
+      builder: (context, s) => s.hasData && !s.data!.isPro
+          ? PaywallScreen(
+              billing: _billing,
+              onRestored: _reload,
+              onSignOut: widget.onSignOut,
+            )
+          : _home(context),
+    );
+  }
+
+  Widget _home(BuildContext context) {
     return Scaffold(
       body: SafeArea(
         child: RefreshIndicator(
@@ -150,22 +167,6 @@ class _HomeScreenState extends State<HomeScreen> {
                         ],
                       ),
                     ),
-                  ),
-                  FutureBuilder<Subscription>(
-                    future: _subscription,
-                    builder: (context, s) {
-                      final sub = s.data;
-                      if (sub == null || (sub.isPro && !sub.isTrial)) {
-                        return const SizedBox.shrink();
-                      }
-                      return _PlanBanner(
-                        sub: sub,
-                        onTap: () async {
-                          await showPaywall(context, _billing);
-                          _reload();
-                        },
-                      );
-                    },
                   ),
                   if (hasActive) ...[
                     const SizedBox(height: 12),
@@ -696,42 +697,6 @@ class _ErrorBox extends StatelessWidget {
       TextButton(onPressed: onRetry, child: const Text('Tentar novamente')),
     ],
   );
-}
-
-/// Banner de assinatura: dias de trial restantes ou aviso de teste expirado.
-class _PlanBanner extends StatelessWidget {
-  const _PlanBanner({required this.sub, required this.onTap});
-
-  final Subscription sub;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final expired = sub.trialExpired;
-    final (icon, color, title, subtitle) = expired
-        ? (
-            Icons.lock_clock,
-            Colors.orange.shade800,
-            'Seu período de teste acabou',
-            'Assine o Pro para continuar com rotas grandes',
-          )
-        : (
-            Icons.workspace_premium_outlined,
-            EntreggoColors.accent,
-            'Teste Pro: ${sub.trialDaysLeft} ${sub.trialDaysLeft == 1 ? 'dia restante' : 'dias restantes'}',
-            'Depois, R\$ 29,90/mês pela Google Play',
-          );
-    return Card(
-      color: color.withValues(alpha: 0.1),
-      child: ListTile(
-        leading: Icon(icon, color: color),
-        title: Text(title, style: TextStyle(fontWeight: FontWeight.w700)),
-        subtitle: Text(subtitle),
-        trailing: const Icon(Icons.chevron_right),
-        onTap: onTap,
-      ),
-    );
-  }
 }
 
 /// Gráfico dos últimos 7 dias: barras empilhadas (entregue/falha/pulado)
