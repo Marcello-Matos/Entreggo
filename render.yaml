@@ -15,4 +15,4 @@ services:
       - key: NOMINATIM_CONTACT
         sync: false
       - key: PRO_EMAILS
-        value: marcellomatosxads@gmail.com
+        value: marcellomatosxads@gmail.com,revisor.play@entreggo.app
