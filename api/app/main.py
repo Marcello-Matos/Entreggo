@@ -51,3 +51,9 @@ def health():
 @app.get("/privacy", response_class=HTMLResponse, include_in_schema=False)
 def privacy():
     return (Path(__file__).parent / "privacy.html").read_text(encoding="utf-8")
+
+
+# Termos de Serviço públicos (campo opcional na ficha da Google Play).
+@app.get("/terms", response_class=HTMLResponse, include_in_schema=False)
+def terms():
+    return (Path(__file__).parent / "terms.html").read_text(encoding="utf-8")
